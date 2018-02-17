@@ -135,7 +135,7 @@ class Learner():
             if np.sum(layer_opt.wds) == 0:
                 print('fit() warning: use_wd_sched is set to True, but weight decay(s) passed are 0. Use wds to '
                       'pass weight decay values.')
-            batch_per_epoch = len(data.trn_dl)
+            batch_per_epoch = len(data.train_dl)
             cl = cycle_len if cycle_len else 1
             self.wd_sched = WeightDecaySchedule(layer_opt, batch_per_epoch, cl, cycle_mult, n_cycle,
                                                 norm_wds, wds_sched_mult)
@@ -144,10 +144,10 @@ class Learner():
         elif use_clr is not None:
             clr_div,cut_div = use_clr
             cycle_end = self.get_cycle_end(cycle_save_name)
-            self.sched = CircularLR(layer_opt, len(data.trn_dl)*cycle_len, on_cycle_end=cycle_end, div=clr_div, cut_div=cut_div)
+            self.sched = CircularLR(layer_opt, len(data.train_dl)*cycle_len, on_cycle_end=cycle_end, div=clr_div, cut_div=cut_div)
         elif cycle_len:
             cycle_end = self.get_cycle_end(cycle_save_name)
-            cycle_batches = len(data.trn_dl)*cycle_len
+            cycle_batches = len(data.train_dl)*cycle_len
             self.sched = CosAnneal(layer_opt, cycle_batches, on_cycle_end=cycle_end, cycle_mult=cycle_mult)
         elif not self.sched: self.sched=LossRecorder(layer_opt)
         callbacks+=[self.sched]
@@ -210,7 +210,7 @@ class Learner():
 
     def warm_up(self, lr, wds=None):
         layer_opt = self.get_layer_opt(lr/4, wds)
-        self.sched = LR_Finder(layer_opt, len(self.data.trn_dl), lr, linear=True)
+        self.sched = LR_Finder(layer_opt, len(self.data.train_dl), lr, linear=True)
         return self.fit_gen(self.model, self.data, layer_opt, 1)
 
     def lr_find(self, start_lr=1e-5, end_lr=10, wds=None, linear=False):
@@ -248,7 +248,7 @@ class Learner():
         """
         self.save('tmp')
         layer_opt = self.get_layer_opt(start_lr, wds)
-        self.sched = LR_Finder(layer_opt, len(self.data.trn_dl), end_lr, linear=linear)
+        self.sched = LR_Finder(layer_opt, len(self.data.train_dl), end_lr, linear=linear)
         self.fit_gen(self.model, self.data, layer_opt, 1)
         self.load('tmp')
 

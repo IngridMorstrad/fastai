@@ -93,9 +93,17 @@ class ConvLearner(Learner):
         self.precompute = precompute
 
     @classmethod
-    def pretrained(cls, f, data, ps=None, xtra_fc=None, xtra_cut=0, **kwargs):
-        models = ConvnetBuilder(f, data.c, data.is_multi, data.is_reg, ps=ps, xtra_fc=xtra_fc, xtra_cut=xtra_cut)
-        return cls(data, models, **kwargs)
+    def pretrained(cls, model_constructor, data, ps=None, xtra_fc=None, xtra_cut=0, precompute=True, **kwargs):
+        """
+        Creates a pretrained model
+        
+        Arguments:
+          model_constructor: a model creation function (e.g. resnet34, vgg16, etc)
+          ps: percentage of weights to set to 0 (dropout)
+          precompute: whether the precomputed activations should be used
+        """
+        models = ConvnetBuilder(model_constructor, data.c, data.is_multi, data.is_reg, ps=ps, xtra_fc=xtra_fc, xtra_cut=xtra_cut)
+        return cls(data, models, precompute, **kwargs)
 
     @property
     def model(self): return self.models.fc_model if self.precompute else self.models.model
@@ -139,7 +147,7 @@ class ConvLearner(Learner):
         self.get_activations()
         act, val_act, test_act = self.activations
         m=self.models.top_model
-        if len(self.activations[0])!=len(self.data.trn_ds):
+        if len(self.activations[0])!=len(self.data.train_ds):
             predict_to_bcolz(m, self.data.fix_dl, act)
         if len(self.activations[1])!=len(self.data.val_ds):
             predict_to_bcolz(m, self.data.val_dl, val_act)
@@ -147,7 +155,7 @@ class ConvLearner(Learner):
             if self.data.test_dl: predict_to_bcolz(m, self.data.test_dl, test_act)
 
         self.fc_data = ImageClassifierData.from_arrays(self.data.path,
-                (act, self.data.trn_y), (val_act, self.data.val_y), self.data.bs, classes=self.data.classes,
+                (act, self.data.train_y), (val_act, self.data.val_y), self.data.bs, classes=self.data.classes,
                 test = test_act if self.data.test_dl else None, num_workers=8)
 
     def freeze(self):

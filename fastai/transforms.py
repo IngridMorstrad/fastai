@@ -433,23 +433,23 @@ class CropType(IntEnum):
 
 
 class Transforms():
-    def __init__(self, sz, tfms, normalizer, denorm, crop_type=CropType.CENTER, tfm_y=TfmType.NO):
+    def __init__(self, sz, transforms, normalizer, denorm, crop_type=CropType.CENTER, tfm_y=TfmType.NO):
         self.sz,self.denorm = sz,denorm
         crop_tfm = CenterCrop(sz, tfm_y)
         if crop_type == CropType.RANDOM: crop_tfm = RandomCrop(sz, tfm_y)
         if crop_type == CropType.NO: crop_tfm = NoCrop(sz, tfm_y)
-        self.tfms = tfms + [crop_tfm, normalizer, channel_dim]
-    def __call__(self, im, y=None): return compose(im, y, self.tfms)
+        self.transforms = transforms + [crop_tfm, normalizer, channel_dim]
+    def __call__(self, im, y=None): return compose(im, y, self.transforms)
 
 
-def image_gen(normalizer, denorm, sz, tfms=None, max_zoom=None, pad=0, crop_type=None, tfm_y=None):
+def image_gen(normalizer, denorm, sz, transforms=None, max_zoom=None, pad=0, crop_type=None, tfm_y=None):
     if tfm_y is None: tfm_y=TfmType.NO
-    if tfms is None: tfms=[]
-    elif not isinstance(tfms, collections.Iterable): tfms=[tfms]
+    if transforms is None: transforms=[]
+    elif not isinstance(transforms, collections.Iterable): transforms=[transforms]
     scale = [RandomScale(sz, max_zoom, tfm_y=tfm_y) if max_zoom is not None else Scale(sz, tfm_y)]
     if pad: scale.append(AddPadding(pad))
     if (max_zoom is not None or pad!=0) and crop_type is None: crop_type = CropType.RANDOM
-    return Transforms(sz, scale + tfms, normalizer, denorm, crop_type, tfm_y)
+    return Transforms(sz, scale + transforms, normalizer, denorm, crop_type, tfm_y)
 
 def noop(x): return x
 
@@ -462,17 +462,17 @@ imagenet_stats = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 inception_stats = ([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
 inception_models = (inception_4, inceptionresnet_2)
 
-def tfms_from_stats(stats, sz, aug_tfms=None, max_zoom=None, pad=0, crop_type=None, tfm_y=None):
-    if aug_tfms is None: aug_tfms=[]
+def transforms_from_stats(stats, sz, aug_transforms=None, max_zoom=None, pad=0, crop_type=None, tfm_y=None):
+    if aug_transforms is None: aug_transforms=[]
     tfm_norm = Normalize(*stats)
     tfm_denorm = Denormalize(*stats)
     val_tfm = image_gen(tfm_norm, tfm_denorm, sz, pad=pad, crop_type=CropType.CENTER, tfm_y=tfm_y)
-    trn_tfm=image_gen(tfm_norm, tfm_denorm, sz, tfms=aug_tfms, max_zoom=max_zoom,
+    trn_tfm=image_gen(tfm_norm, tfm_denorm, sz, transforms=aug_transforms, max_zoom=max_zoom,
                       pad=pad, crop_type=crop_type, tfm_y=tfm_y)
     return trn_tfm, val_tfm
 
 
-def tfms_from_model(f_model, sz, aug_tfms=None, max_zoom=None, pad=0, crop_type=None, tfm_y=None):
+def transforms_from_model(f_model, sz, aug_transforms=None, max_zoom=None, pad=0, crop_type=None, tfm_y=None):
     stats = inception_stats if f_model in inception_models else imagenet_stats
-    return tfms_from_stats(stats, sz, aug_tfms, max_zoom=max_zoom, pad=pad, crop_type=crop_type, tfm_y=tfm_y)
+    return transforms_from_stats(stats, sz, aug_transforms, max_zoom=max_zoom, pad=pad, crop_type=crop_type, tfm_y=tfm_y)
 

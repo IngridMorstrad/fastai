@@ -202,25 +202,25 @@ class ArraysNhotDataset(ArraysDataset):
 
 
 class ModelData():
-    def __init__(self, path, trn_dl, val_dl, test_dl=None):
-        self.path,self.trn_dl,self.val_dl,self.test_dl = path,trn_dl,val_dl,test_dl
+    def __init__(self, path, train_dl, val_dl, test_dl=None):
+        self.path,self.train_dl,self.val_dl,self.test_dl = path,train_dl,val_dl,test_dl
 
     @classmethod
-    def from_dls(cls, path,trn_dl,val_dl,test_dl=None):
-        trn_dl,val_dl = ModelDataLoader(trn_dl),ModelDataLoader(val_dl)
+    def from_dls(cls, path,train_dl,val_dl,test_dl=None):
+        train_dl,val_dl = ModelDataLoader(train_dl),ModelDataLoader(val_dl)
         if test_dl: test_dl = ModelDataLoader(test_dl)
-        return cls(path, trn_dl, val_dl, test_dl)
+        return cls(path, train_dl, val_dl, test_dl)
 
     @property
-    def is_reg(self): return self.trn_ds.is_reg
+    def is_reg(self): return self.train_ds.is_reg
     @property
-    def trn_ds(self): return self.trn_dl.dataset
+    def train_ds(self): return self.train_dl.dataset
     @property
     def val_ds(self): return self.val_dl.dataset
     @property
     def test_ds(self): return self.test_dl.dataset
     @property
-    def trn_y(self): return self.trn_ds.y
+    def train_y(self): return self.train_ds.y
     @property
     def val_y(self): return self.val_ds.y
 
@@ -247,11 +247,11 @@ class ModelDataLoader():
 
 class ImageData(ModelData):
     def __init__(self, path, datasets, bs, num_workers, classes):
-        trn_ds,val_ds,fix_ds,aug_ds,test_ds,test_aug_ds = datasets
+        train_ds,val_ds,fix_ds,aug_ds,test_ds,test_aug_ds = datasets
         self.path,self.bs,self.num_workers,self.classes = path,bs,num_workers,classes
-        self.trn_dl,self.val_dl,self.fix_dl,self.aug_dl,self.test_dl,self.test_aug_dl = [
+        self.train_dl,self.val_dl,self.fix_dl,self.aug_dl,self.test_dl,self.test_aug_dl = [
             self.get_dl(ds,shuf) for ds,shuf in [
-                (trn_ds,True),(val_ds,False),(fix_ds,False),(aug_ds,False),
+                (train_ds,True),(val_ds,False),(fix_ds,False),(aug_ds,False),
                 (test_ds,False),(test_aug_ds,False)
             ]
         ]
@@ -262,16 +262,16 @@ class ImageData(ModelData):
             num_workers=self.num_workers, pin_memory=False)
 
     @property
-    def sz(self): return self.trn_ds.sz
+    def sz(self): return self.train_ds.sz
     @property
-    def c(self): return self.trn_ds.c
+    def c(self): return self.train_ds.c
 
     def resized(self, dl, targ, new_path):
         return dl.dataset.resize_imgs(targ,new_path) if dl else None
 
     def resize(self, targ, new_path):
         new_ds = []
-        dls = [self.trn_dl,self.val_dl,self.fix_dl,self.aug_dl]
+        dls = [self.train_dl,self.val_dl,self.fix_dl,self.aug_dl]
         if self.test_dl: dls += [self.test_dl, self.test_aug_dl]
         else: dls += [None,None]
         t = tqdm_notebook(dls)
@@ -282,55 +282,55 @@ class ImageData(ModelData):
 
 class ImageClassifierData(ImageData):
     @property
-    def is_multi(self): return self.trn_dl.dataset.is_multi
+    def is_multi(self): return self.train_dl.dataset.is_multi
 
     @staticmethod
-    def get_ds(fn, trn, val, tfms, test=None, **kwargs):
+    def get_ds(fn, train, val, transforms, test=None, **kwargs):
         res = [
-            fn(trn[0], trn[1], tfms[0], **kwargs), # train
-            fn(val[0], val[1], tfms[1], **kwargs), # val
-            fn(trn[0], trn[1], tfms[1], **kwargs), # fix
-            fn(val[0], val[1], tfms[0], **kwargs)  # aug
+            fn(train[0], train[1], transforms[0], **kwargs), # train
+            fn(val[0], val[1], transforms[1], **kwargs), # val
+            fn(train[0], train[1], transforms[1], **kwargs), # fix
+            fn(val[0], val[1], transforms[0], **kwargs)  # aug
         ]
         if test is not None:
             test_lbls = np.zeros((len(test),1))
             res += [
-                fn(test, test_lbls, tfms[1], **kwargs), # test
-                fn(test, test_lbls, tfms[0], **kwargs)  # test_aug
+                fn(test, test_lbls, transforms[1], **kwargs), # test
+                fn(test, test_lbls, transforms[0], **kwargs)  # test_aug
             ]
         else: res += [None,None]
         return res
 
     @classmethod
-    def from_arrays(cls, path, trn, val, bs=64, tfms=(None,None), classes=None, num_workers=4, test=None):
+    def from_arrays(cls, path, train, val, bs=64, transforms=(None,None), classes=None, num_workers=4, test=None):
         """ Read in images and their labels given as numpy arrays
 
         Arguments:
             path: a root path of the data (used for storing trained models, precomputed values, etc)
-            trn: a tuple of training data matrix and target label/classification array (e.g. `trn=(x,y)` where `x` has the
+            train: a tuple of training data matrix and target label/classification array (e.g. `train=(x,y)` where `x` has the
                 shape of `(5000, 784)` and `y` has the shape of `(5000,)`)
             val: a tuple of validation data matrix and target label/classification array.
             bs: batch size
-            tfms: transformations (for data augmentations). e.g. output of `tfms_from_model`
+            transforms: transformations (for data augmentations). e.g. output of `transforms_from_model`
             classes: a list of all labels/classifications
             num_workers: a number of workers
-            test: a matrix of test data (the shape should match `trn[0]`)
+            test: a matrix of test data (the shape should match `train[0]`)
 
         Returns:
             ImageClassifierData
         """
-        datasets = cls.get_ds(ArraysIndexDataset, trn, val, tfms, test=test)
+        datasets = cls.get_ds(ArraysIndexDataset, train, val, transforms, test=test)
         return cls(path, datasets, bs, num_workers, classes=classes)
 
     @classmethod
-    def from_paths(cls, path, bs=64, tfms=(None,None), trn_name='train', val_name='valid', test_name=None, num_workers=8):
+    def from_paths(cls, path, bs=64, transforms=(None,None), train_name='train', val_name='valid', test_name=None, num_workers=8):
         """ Read in images and their labels given as sub-folder names
 
         Arguments:
             path: a root path of the data (used for storing trained models, precomputed values, etc)
             bs: batch size
-            tfms: transformations (for data augmentations). e.g. output of `tfms_from_model`
-            trn_name: a name of the folder that contains training images.
+            transforms: transformations (for data augmentations). e.g. output of `transforms_from_model`
+            train_name: a name of the folder that contains training images.
             val_name:  a name of the folder that contains validation images.
             test_name:  a name of the folder that contains test images.
             num_workers: number of workers
@@ -338,13 +338,13 @@ class ImageClassifierData(ImageData):
         Returns:
             ImageClassifierData
         """
-        trn,val = [folder_source(path, o) for o in (trn_name, val_name)]
+        train,val = [folder_source(path, o) for o in (train_name, val_name)]
         test_fnames = read_dir(path, test_name) if test_name else None
-        datasets = cls.get_ds(FilesIndexArrayDataset, trn, val, tfms, path=path, test=test_fnames)
-        return cls(path, datasets, bs, num_workers, classes=trn[2])
+        datasets = cls.get_ds(FilesIndexArrayDataset, train, val, transforms, path=path, test=test_fnames)
+        return cls(path, datasets, bs, num_workers, classes=train[2])
 
     @classmethod
-    def from_csv(cls, path, folder, csv_fname, bs=64, tfms=(None,None),
+    def from_csv(cls, path, folder, csv_fname, bs=64, transforms=(None,None),
                val_idxs=None, suffix='', test_name=None, continuous=False, skip_header=True, num_workers=8):
         """ Read in images and their labels given as a CSV file.
 
@@ -356,7 +356,7 @@ class ImageClassifierData(ImageData):
             folder: a name of the folder in which training images are contained.
             csv_fname: a name of the CSV file which contains target labels.
             bs: batch size
-            tfms: transformations (for data augmentations). e.g. output of `tfms_from_model`
+            transforms: transformations (for data augmentations). e.g. output of `transforms_from_model`
             val_idxs: index of images to be used for validation. e.g. output of `get_cv_idxs`.
                 If None, default arguments to get_cv_idxs are used.
             suffix: suffix to add to image names in CSV file (sometimes CSV only contains the file name without file
@@ -372,14 +372,14 @@ class ImageClassifierData(ImageData):
         fnames,y,classes = csv_source(folder, csv_fname, skip_header, suffix, continuous=continuous)
 
         val_idxs = get_cv_idxs(len(fnames)) if val_idxs is None else val_idxs
-        ((val_fnames,trn_fnames),(val_y,trn_y)) = split_by_idx(val_idxs, np.array(fnames), y)
+        ((val_fnames,train_fnames),(val_y,train_y)) = split_by_idx(val_idxs, np.array(fnames), y)
 
         test_fnames = read_dir(path, test_name) if test_name else None
         if continuous:
             f = FilesIndexArrayRegressionDataset
         else:
-            f = FilesIndexArrayDataset if len(trn_y.shape)==1 else FilesNhotArrayDataset
-        datasets = cls.get_ds(f, (trn_fnames,trn_y), (val_fnames,val_y), tfms,
+            f = FilesIndexArrayDataset if len(train_y.shape)==1 else FilesNhotArrayDataset
+        datasets = cls.get_ds(f, (train_fnames,train_y), (val_fnames,val_y), transforms,
                                path=path, test=test_fnames)
         return cls(path, datasets, bs, num_workers, classes=classes)
 

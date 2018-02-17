@@ -81,14 +81,14 @@ def fit(model, data, epochs, opt, crit, metrics=None, callbacks=None, **kwargs):
     names = ["epoch", "trn_loss", "val_loss"] + [f.__name__ for f in metrics]
     layout = "{!s:10} " * len(names)
     
-    num_batch = len(data.trn_dl)
+    num_batch = len(data.train_dl)
     if epochs<1:
         num_batch = int(num_batch*epochs)
         epochs = 1
 
     for epoch in tnrange(epochs, desc='Epoch'):
         stepper.reset(True)
-        t = tqdm(iter(data.trn_dl), leave=False, total=num_batch)
+        t = tqdm(iter(data.train_dl), leave=False, total=num_batch)
         i = 0
         for (*x,y) in t:
             batch_num += 1
