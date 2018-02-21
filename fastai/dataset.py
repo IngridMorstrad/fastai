@@ -5,45 +5,45 @@ from .transforms import *
 from .layer_optimizer import *
 from .dataloader import DataLoader
 
-def get_cv_idxs(n, cv_idx=0, val_pct=0.2, seed=42):
+def get_cross_validation_idxs(n, cross_validation_idx=0, val_pct=0.2, seed=42):
     np.random.seed(seed)
     n_val = int(val_pct*n)
-    idx_start = cv_idx*n_val
+    idx_start = cross_validation_idx*n_val
     idxs = np.random.permutation(n)
     return idxs[idx_start:idx_start+n_val]
 
-def resize_img(fname, targ, path, new_path):
-    dest = os.path.join(path,new_path,str(targ),fname)
+def resize_img(filename, targ, path, new_path):
+    dest = os.path.join(path,new_path,str(targ),filename)
     if os.path.exists(dest): return
-    im = Image.open(os.path.join(path, fname)).convert('RGB')
-    r,c = im.size
+    image = Image.open(os.path.join(path, filename)).convert('RGB')
+    r,c = image.size
     ratio = targ/min(r,c)
     sz = (scale_to(r, ratio, targ), scale_to(c, ratio, targ))
     os.makedirs(os.path.split(dest)[0], exist_ok=True)
-    im.resize(sz, Image.LINEAR).save(dest)
+    image.resize(sz, Image.LINEAR).save(dest)
 
-def resize_imgs(fnames, targ, path, new_path):
-    if not os.path.exists(os.path.join(path,new_path,str(targ),fnames[0])):
-        with ThreadPoolExecutor(8) as e:
-            ims = e.map(lambda x: resize_img(x, targ, path, 'tmp'), fnames)
-            for x in tqdm(ims, total=len(fnames), leave=False): pass
+def resize_imgs(filenames, targ, path, new_path):
+    if not os.path.exists(os.path.join(path,new_path,str(targ),filenames[0])):
+        with ThreadPoolExecutor(8) as executor:
+            images = executor.map(lambda x: resize_img(x, targ, path, 'tmp'), filenames)
+            for x in tqdm(images, total=len(filenames), leave=False): pass
     return os.path.join(path,new_path,str(targ))
 
 def read_dir(path, folder):
     full_path = os.path.join(path, folder)
-    fnames = glob(f"{full_path}/*.*")
-    if any(fnames):
-        return [os.path.relpath(f,path) for f in fnames]
+    filenames = glob(f"{full_path}/*.*")
+    if any(filenames):
+        return [os.path.relpath(f,path) for f in filenames]
     else:
         raise FileNotFoundError("{} folder doesn't exist or is empty".format(folder))
 
 def read_dirs(path, folder):
-    labels, filenames, all_labels = [], [], []
+    labels, filenames = [], []
     full_path = os.path.join(path, folder)
-    for label in sorted(os.listdir(full_path)):
-        all_labels.append(label)
-        for fname in os.listdir(os.path.join(full_path, label)):
-            filenames.append(os.path.join(folder, label, fname))
+    all_labels = sorted(os.listdir(full_path))
+    for label in all_labels:
+        for filename in os.listdir(os.path.join(full_path, label)):
+            filenames.append(os.path.join(folder, label, filename))
             labels.append(label)
     return filenames, labels, all_labels
 
@@ -53,34 +53,33 @@ def n_hot(ids, c):
     return res
 
 def folder_source(path, folder):
-    fnames, lbls, all_labels = read_dirs(path, folder)
+    filenames, labels, all_labels = read_dirs(path, folder)
     label2idx = {v:k for k,v in enumerate(all_labels)}
-    idxs = [label2idx[lbl] for lbl in lbls]
-    c = len(all_labels)
+    idxs = [label2idx[label] for label in labels]
     label_arr = np.array(idxs, dtype=int)
-    return fnames, label_arr, all_labels
+    return filenames, label_arr, all_labels
 
 def parse_csv_labels(fn, skip_header=True):
     skip = 1 if skip_header else 0
     csv_lines = [o.strip().split(',') for o in open(fn)][skip:]
-    fnames = [fname for fname, _ in csv_lines]
+    filenames = [filename for filename, _ in csv_lines]
     csv_labels = {a:b.split(' ') for a,b in csv_lines}
     all_labels = sorted(list(set(p for o in csv_labels.values() for p in o)))
     label2idx = {v:k for k,v in enumerate(all_labels)}
-    return sorted(fnames), csv_labels, all_labels, label2idx
+    return sorted(filenames), csv_labels, all_labels, label2idx
 
-def nhot_labels(label2idx, csv_labels, fnames, c):
+def nhot_labels(label2idx, csv_labels, filenames, c):
     all_idx = {k: n_hot([label2idx[o] for o in v], c)
                for k,v in csv_labels.items()}
-    return np.stack([all_idx[o] for o in fnames])
+    return np.stack([all_idx[o] for o in filenames])
 
 def csv_source(folder, csv_file, skip_header=True, suffix='', continuous=False):
-    fnames,csv_labels,all_labels,label2idx = parse_csv_labels(csv_file, skip_header)
-    full_names = [os.path.join(folder,fn+suffix) for fn in fnames]
+    filenames,csv_labels,all_labels,label2idx = parse_csv_labels(csv_file, skip_header)
+    full_names = [os.path.join(folder,fn+suffix) for fn in filenames]
     if continuous:
-        label_arr = np.array([csv_labels[i] for i in fnames]).astype(np.float32)
+        label_arr = np.array([csv_labels[i] for i in filenames]).astype(np.float32)
     else:
-        label_arr = nhot_labels(label2idx, csv_labels, fnames, len(all_labels))
+        label_arr = nhot_labels(label2idx, csv_labels, filenames, len(all_labels))
         is_single = np.all(label_arr.sum(axis=1)==1)
         if is_single: label_arr = np.argmax(label_arr, axis=1)
     return full_names, label_arr, all_labels
@@ -137,16 +136,16 @@ def open_image(fn):
             raise OSError('Error handling image at: {}'.format(fn)) from e
 
 class FilesDataset(BaseDataset):
-    def __init__(self, fnames, transform, path):
-        self.path,self.fnames = path,fnames
+    def __init__(self, filenames, transform, path):
+        self.path,self.filenames = path,filenames
         super().__init__(transform)
     def get_n(self): return len(self.y)
     def get_sz(self): return self.transform.sz
-    def get_x(self, i): return open_image(os.path.join(self.path, self.fnames[i]))
+    def get_x(self, i): return open_image(os.path.join(self.path, self.filenames[i]))
 
     def resize_imgs(self, targ, new_path):
-        dest = resize_imgs(self.fnames, targ, self.path, new_path)
-        return self.__class__(self.fnames, self.y, self.transform, dest)
+        dest = resize_imgs(self.filenames, targ, self.path, new_path)
+        return self.__class__(self.filenames, self.y, self.transform, dest)
 
     def denorm(self,arr):
         """Reverse the normalization done to a batch of images.
@@ -159,10 +158,10 @@ class FilesDataset(BaseDataset):
         return self.transform.denorm(np.rollaxis(arr,1,4))
 
 class FilesArrayDataset(FilesDataset):
-    def __init__(self, fnames, y, transform, path):
+    def __init__(self, filenames, y, transform, path):
         self.y=y
-        assert(len(fnames)==len(y))
-        super().__init__(fnames, transform, path)
+        assert(len(filenames)==len(y))
+        super().__init__(filenames, transform, path)
     def get_y(self, i): return self.y[i]
     def get_c(self): return self.y.shape[1]
 
@@ -339,12 +338,12 @@ class ImageClassifierData(ImageData):
             ImageClassifierData
         """
         train,val = [folder_source(path, o) for o in (train_name, val_name)]
-        test_fnames = read_dir(path, test_name) if test_name else None
-        datasets = cls.get_ds(FilesIndexArrayDataset, train, val, transforms, path=path, test=test_fnames)
+        test_filenames = read_dir(path, test_name) if test_name else None
+        datasets = cls.get_ds(FilesIndexArrayDataset, train, val, transforms, path=path, test=test_filenames)
         return cls(path, datasets, bs, num_workers, classes=train[2])
 
     @classmethod
-    def from_csv(cls, path, folder, csv_fname, bs=64, transforms=(None,None),
+    def from_csv(cls, path, folder, csv_filename, bs=64, transforms=(None,None),
                val_idxs=None, suffix='', test_name=None, continuous=False, skip_header=True, num_workers=8):
         """ Read in images and their labels given as a CSV file.
 
@@ -354,7 +353,7 @@ class ImageClassifierData(ImageData):
         Arguments:
             path: a root path of the data (used for storing trained models, precomputed values, etc)
             folder: a name of the folder in which training images are contained.
-            csv_fname: a name of the CSV file which contains target labels.
+            csv_filename: a name of the CSV file which contains target labels.
             bs: batch size
             transforms: transformations (for data augmentations). e.g. output of `transforms_from_model`
             val_idxs: index of images to be used for validation. e.g. output of `get_cv_idxs`.
@@ -369,18 +368,18 @@ class ImageClassifierData(ImageData):
         Returns:
             ImageClassifierData
         """
-        fnames,y,classes = csv_source(folder, csv_fname, skip_header, suffix, continuous=continuous)
+        filenames,y,classes = csv_source(folder, csv_filename, skip_header, suffix, continuous=continuous)
 
-        val_idxs = get_cv_idxs(len(fnames)) if val_idxs is None else val_idxs
-        ((val_fnames,train_fnames),(val_y,train_y)) = split_by_idx(val_idxs, np.array(fnames), y)
+        val_idxs = get_cv_idxs(len(filenames)) if val_idxs is None else val_idxs
+        ((val_filenames,train_filenames),(val_y,train_y)) = split_by_idx(val_idxs, np.array(filenames), y)
 
-        test_fnames = read_dir(path, test_name) if test_name else None
+        test_filenames = read_dir(path, test_name) if test_name else None
         if continuous:
             f = FilesIndexArrayRegressionDataset
         else:
             f = FilesIndexArrayDataset if len(train_y.shape)==1 else FilesNhotArrayDataset
-        datasets = cls.get_ds(f, (train_fnames,train_y), (val_fnames,val_y), transforms,
-                               path=path, test=test_fnames)
+        datasets = cls.get_ds(f, (train_filenames,train_y), (val_filenames,val_y), transforms,
+                               path=path, test=test_filenames)
         return cls(path, datasets, bs, num_workers, classes=classes)
 
 def split_by_idx(idxs, *a):

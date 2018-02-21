@@ -16,32 +16,32 @@ class ConvnetBuilder():
     """Class representing a convolutional network.
 
     Arguments:
-        f: a model creation function (e.g. resnet34, vgg16, etc)
-        c (int): size of the last layer
+        model_creation_function: a model creation function (e.g. resnet34, vgg16, etc)
+        last_layer_size (int): size of the last layer
         is_multi (bool): is multilabel classification?
             (def here http://scikit-learn.org/stable/modules/multiclass.html)
         is_reg (bool): is a regression?
-        ps (float or array of float): dropout parameters
+        dropout_percs (float or array of float): dropout parameters
         xtra_fc (list of ints): list of hidden layers with # hidden neurons
         xtra_cut (int): # layers earlier than default to cut the model, detault is 0
     """
 
-    def __init__(self, f, c, is_multi, is_reg, ps=None, xtra_fc=None, xtra_cut=0):
-        self.f,self.c,self.is_multi,self.is_reg,self.xtra_cut = f,c,is_multi,is_reg,xtra_cut
-        if ps is None: ps = [0.25,0.5]
+    def __init__(self, model_creation_function, last_layer_size, is_multi, is_reg, dropout_percs=None, xtra_fc=None, xtra_cut=0):
+        self.model_creation_function,self.last_layer_size,self.is_multi,self.is_reg,self.xtra_cut = model_creation_function,last_layer_size,is_multi,is_reg,xtra_cut
+        if dropout_percs is None: dropout_percs = [0.25,0.5]
         if xtra_fc is None: xtra_fc = [512]
-        self.ps,self.xtra_fc = ps,xtra_fc
+        self.dropout_percs,self.xtra_fc = dropout_percs,xtra_fc
 
-        if f in model_meta: cut,self.lr_cut = model_meta[f]
+        if model_creation_function in model_meta: cut,self.lr_cut = model_meta[model_creation_function]
         else: cut,self.lr_cut = 0,0
         cut-=xtra_cut
-        layers = cut_model(f(True), cut)
-        self.nf = model_features[f] if f in model_features else (num_features(layers)*2)
+        layers = cut_model(model_creation_function(True), cut)
+        self.nf = model_features[model_creation_function] if model_creation_function in model_features else (num_features(layers)*2)
         layers += [AdaptiveConcatPool2d(), Flatten()]
         self.top_model = nn.Sequential(*layers)
 
         n_fc = len(self.xtra_fc)+1
-        if not isinstance(self.ps, list): self.ps = [self.ps]*n_fc
+        if not isinstance(self.dropout_percs, list): self.dropout_percs = [self.dropout_percs]*n_fc
 
         fc_layers = self.get_fc_layers()
         self.n_fc = len(fc_layers)
@@ -50,7 +50,7 @@ class ConvnetBuilder():
         self.model = to_gpu(nn.Sequential(*(layers+fc_layers)))
 
     @property
-    def name(self): return f'{self.f.__name__}_{self.xtra_cut}'
+    def name(self): return f'{self.model_creation_function.__name__}_{self.xtra_cut}'
 
     def create_fc_layer(self, ni, nf, p, actn=None):
         res=[nn.BatchNorm1d(num_features=ni)]
@@ -63,11 +63,11 @@ class ConvnetBuilder():
         res=[]
         ni=self.nf
         for i,nf in enumerate(self.xtra_fc):
-            res += self.create_fc_layer(ni, nf, p=self.ps[i], actn=nn.ReLU())
+            res += self.create_fc_layer(ni, nf, p=self.dropout_percs[i], actn=nn.ReLU())
             ni=nf
         final_actn = nn.Sigmoid() if self.is_multi else nn.LogSoftmax()
         if self.is_reg: final_actn = None
-        res += self.create_fc_layer(ni, self.c, p=self.ps[-1], actn=final_actn)
+        res += self.create_fc_layer(ni, self.last_layer_size, p=self.dropout_percs[-1], actn=final_actn)
         return res
 
     def get_layer_groups(self, do_fc=False):
@@ -93,16 +93,16 @@ class ConvLearner(Learner):
         self.precompute = precompute
 
     @classmethod
-    def pretrained(cls, model_constructor, data, ps=None, xtra_fc=None, xtra_cut=0, precompute=True, **kwargs):
+    def pretrained(cls, model_constructor, data, dropout_percs=None, xtra_fc=None, xtra_cut=0, precompute=True, **kwargs):
         """
         Creates a pretrained model
         
         Arguments:
           model_constructor: a model creation function (e.g. resnet34, vgg16, etc)
-          ps: percentage of weights to set to 0 (dropout)
+          dropout_percs: percentage of weights to set to 0 (dropout)
           precompute: whether the precomputed activations should be used
         """
-        models = ConvnetBuilder(model_constructor, data.c, data.is_multi, data.is_reg, ps=ps, xtra_fc=xtra_fc, xtra_cut=xtra_cut)
+        models = ConvnetBuilder(model_constructor, data.c, data.is_multi, data.is_reg, dropout_percs=dropout_percs, xtra_fc=xtra_fc, xtra_cut=xtra_cut)
         return cls(data, models, precompute, **kwargs)
 
     @property
@@ -128,10 +128,10 @@ class ConvLearner(Learner):
         return self.models.get_layer_groups(self.precompute)
 
     def summary(self):
-        precompute = self.precompute
+        temp = self.precompute
         self.precompute = False
         res = super().summary()
-        self.precompute = precompute
+        self.precompute = temp 
         return res
 
     def get_activations(self, force=False):
@@ -145,18 +145,18 @@ class ConvLearner(Learner):
 
     def save_fc1(self):
         self.get_activations()
-        act, val_act, test_act = self.activations
+        activations, val_activations, test_activations = self.activations
         m=self.models.top_model
         if len(self.activations[0])!=len(self.data.train_ds):
-            predict_to_bcolz(m, self.data.fix_dl, act)
+            predict_to_bcolz(m, self.data.fix_dl, activations)
         if len(self.activations[1])!=len(self.data.val_ds):
-            predict_to_bcolz(m, self.data.val_dl, val_act)
+            predict_to_bcolz(m, self.data.val_dl, val_activations)
         if self.data.test_dl and (len(self.activations[2])!=len(self.data.test_ds)):
-            if self.data.test_dl: predict_to_bcolz(m, self.data.test_dl, test_act)
+            if self.data.test_dl: predict_to_bcolz(m, self.data.test_dl, test_activations)
 
         self.fc_data = ImageClassifierData.from_arrays(self.data.path,
-                (act, self.data.train_y), (val_act, self.data.val_y), self.data.bs, classes=self.data.classes,
-                test = test_act if self.data.test_dl else None, num_workers=8)
+                (activations, self.data.train_y), (val_activations, self.data.val_y), self.data.bs, classes=self.data.classes,
+                test = test_activations if self.data.test_dl else None, num_workers=8)
 
     def freeze(self):
         """ Freeze all but the very last layer.
