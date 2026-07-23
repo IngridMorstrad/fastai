@@ -26,7 +26,7 @@ jobs:
       - name: Install and check nbdev sync
         run: |
           set -ux
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools
           pip install git+https://github.com/fastai/fastcore.git@master
           pip install git+https://github.com/fastai/nbdev.git@master
           pip install -e ".[dev]" --extra-index-url https://download.pytorch.org/whl/cpu
