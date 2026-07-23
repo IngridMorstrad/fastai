@@ -75,9 +75,8 @@ jobs:
 
     - name: Install libraries
       run: |
-        pip install git+https://github.com/fastai/fastcore.git@master
-        pip install git+https://github.com/fastai/nbdev.git@master
-        pip install -Uq fastprogress
+        pip install "setuptools<75"
+        pip install -Uq fastcore nbdev fastprogress
         pip install -Uqe .[dev] --extra-index-url https://download.pytorch.org/whl/cpu
 
     - name: check for cache hit
