@@ -19,7 +19,6 @@ fastai/model.py
 fastai/nlp.py
 fastai/plots.py
 fastai/rnn_reg.py
-fastai/rnn_train.py
 fastai/set_spawn.py
 fastai/sgdr.py
 fastai/structured.py

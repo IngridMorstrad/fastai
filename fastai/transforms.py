@@ -451,7 +451,6 @@ def image_gen(normalizer, denorm, sz, transforms=None, max_zoom=None, pad=0, cro
     if (max_zoom is not None or pad!=0) and crop_type is None: crop_type = CropType.RANDOM
     return Transforms(sz, scale + transforms, normalizer, denorm, crop_type, tfm_y)
 
-def noop(x): return x
 
 # TODO: find a different solution now that we have tfm_y
 transforms_basic    = [RandomRotate(10), RandomLighting(0.05, 0.05)]
