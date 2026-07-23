@@ -16,9 +16,6 @@ def set_plot_sizes(sml, med, big):
     plt.rc('legend', fontsize=sml)    # legend fontsize
     plt.rc('figure', titlesize=big)  # fontsize of the figure title
 
-def parallel_trees(m, fn, n_jobs=8):
-        return list(ProcessPoolExecutor(n_jobs).map(fn, m.estimators_))
-
 def draw_tree(t, df, size=10, ratio=0.6, precision=0):
     """ Draws a representation of a random forest in IPython.
 
@@ -31,18 +28,6 @@ def draw_tree(t, df, size=10, ratio=0.6, precision=0):
                       special_characters=True, rotate=True, precision=precision)
     IPython.display.display(graphviz.Source(re.sub('Tree {',
        f'Tree {{ size={size}; ratio={ratio}', s)))
-
-def combine_date(years, months=1, days=1, weeks=None, hours=None, minutes=None,
-              seconds=None, milliseconds=None, microseconds=None, nanoseconds=None):
-    years = np.asarray(years) - 1970
-    months = np.asarray(months) - 1
-    days = np.asarray(days) - 1
-    types = ('<M8[Y]', '<m8[M]', '<m8[D]', '<m8[W]', '<m8[h]',
-             '<m8[m]', '<m8[s]', '<m8[ms]', '<m8[us]', '<m8[ns]')
-    vals = (years, months, days, weeks, hours, minutes, seconds,
-            milliseconds, microseconds, nanoseconds)
-    return sum(np.asarray(v, dtype=t) for t, v in zip(types, vals)
-               if v is not None)
 
 def get_sample(df,n):
     """ Gets a random sample of n rows from df, without replacement.
