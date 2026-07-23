@@ -3,10 +3,6 @@ from .torch_imports import *
 
 def sum_geom(a,r,n): return a*n if r==1 else math.ceil(a*(1-r**n)/(1-r))
 
-conv_dict = {np.dtype('int8'): torch.LongTensor, np.dtype('int16'): torch.LongTensor,
-    np.dtype('int32'): torch.LongTensor, np.dtype('int64'): torch.LongTensor,
-    np.dtype('float32'): torch.FloatTensor, np.dtype('float64'): torch.FloatTensor}
-
 def T(a):
     if torch.is_tensor(a): res = a
     else:
@@ -77,9 +73,6 @@ def one_hot(a,c): return np.eye(c)[a]
 
 def partition(a, sz): return [a[i:i+sz] for i in range(0, len(a), sz)]
 
-def partition_by_cores(a):
-    return partition(a, len(a)//num_cpus() + 1)
-
 def num_cpus():
     try:
         return len(os.sched_getaffinity(0))
@@ -94,22 +87,5 @@ class BasicModel():
 class SingleModel(BasicModel):
     def get_layer_groups(self): return [self.model]
 
-class SimpleNet(nn.Module):
-    def __init__(self, layers):
-        super().__init__()
-        self.layers = nn.ModuleList([
-            nn.Linear(layers[i], layers[i + 1]) for i in range(len(layers) - 1)])
-
-    def forward(self, x):
-        x = x.view(x.size(0), -1)
-        for l in self.layers:
-            l_x = l(x)
-            x = F.relu(l_x)
-        return F.log_softmax(l_x, dim=-1)
-
-
 def save(fn, a): pickle.dump(a, open(fn,'wb'))
 def load(fn): return pickle.load(open(fn,'rb'))
-def load2(fn): return pickle.load(open(fn,'rb'), encoding='iso-8859-1')
-
-def load_array(fname): return bcolz.open(fname)[:]

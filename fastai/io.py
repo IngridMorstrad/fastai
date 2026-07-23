@@ -1,7 +1,6 @@
 from .imports import *
 from .torch_imports import *
 
-import gzip
 from urllib.request import urlretrieve
 from tqdm import tqdm
 
