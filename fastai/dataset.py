@@ -5,7 +5,7 @@ from .transforms import *
 from .layer_optimizer import *
 from .dataloader import DataLoader
 
-def get_cross_validation_idxs(n, cross_validation_idx=0, val_pct=0.2, seed=42):
+def get_cv_idxs(n, cross_validation_idx=0, val_pct=0.2, seed=42):
     np.random.seed(seed)
     n_val = int(val_pct*n)
     idx_start = cross_validation_idx*n_val
