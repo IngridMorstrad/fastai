@@ -64,8 +64,6 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix'
     plt.xlabel('Predicted label')
 
 
-
-
 class ImageModelResults():
     """ Visualize the results of an image model
     
