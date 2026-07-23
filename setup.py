@@ -9,7 +9,6 @@ Setup script for installing fastai
 ## Imports
 ##########################################################################
 
-#from distutils.core import setup
 from setuptools import setup
 
 
