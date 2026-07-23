@@ -19,9 +19,38 @@ jobs:
   test-nbdev-sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: fastai/workflows/nbdev-ci@master
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          skip_test: true
+          python-version: '3.12'
+      - name: Install and check nbdev sync
+        run: |
+          set -ux
+          python -m pip install --upgrade pip
+          pip install git+https://github.com/fastai/fastcore.git@master
+          pip install git+https://github.com/fastai/nbdev.git@master
+          pip install -e ".[dev]" --extra-index-url https://download.pytorch.org/whl/cpu
+          echo "Check we are starting with clean git checkout"
+          if [[ `git status --porcelain -uno` ]]; then
+            git diff
+            echo "git status is not clean"
+            false
+          fi
+          echo "Trying to strip out notebooks"
+          nbdev_clean
+          echo "Check that strip out was unnecessary"
+          if [[ `git status --porcelain -uno` ]]; then
+            git status -uno
+            echo -e "!!! Detected unstripped out notebooks\n!!!Remember to run nbdev_clean"
+            false
+          fi
+          nbdev_export
+          if [[ `git status --porcelain -uno` ]]; then
+            echo "::error::Notebooks and library are not in sync. Please run nbdev_export."
+            git status -uno
+            git diff
+            exit 1;
+          fi
 
   test-notebooks:
     needs: test-nbdev-sync
