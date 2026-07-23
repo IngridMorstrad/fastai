@@ -7,10 +7,6 @@ from .learner import *
 from .text import *
 from .lm_rnn import *
 
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.model_selection import train_test_split
-from torchtext.datasets import language_modeling
-
 class DotProdNB(nn.Module):
     def __init__(self, nf, ny, w_adj=0.4, r_adj=10):
         super().__init__()
