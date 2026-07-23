@@ -27,7 +27,8 @@ jobs:
         run: |
           set -ux
           python -m pip install --upgrade pip
-          pip install -U "nbdev<3" "execnb<0.2" "fastcore>=1.5.29,<2"
+          pip install "setuptools<75"
+          pip install -U "nbdev==2.3.32" "execnb<0.2" "fastcore>=1.5.29,<1.8"
           pip install -e ".[dev]" --extra-index-url https://download.pytorch.org/whl/cpu
           echo "Check we are starting with clean git checkout"
           if [[ `git status --porcelain -uno` ]]; then
