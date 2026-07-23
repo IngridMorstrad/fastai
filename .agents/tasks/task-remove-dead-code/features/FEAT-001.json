@@ -1,0 +1,36 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Remove dead code from the fastai package: unused functions, unused variables, commented-out code, unused imports, and an empty module file.",
+  "status": "completed",
+  "steps": [
+    "In fastai/core.py: Remove the `conv_dict` variable (lines 6-8) - it is defined but never referenced anywhere in the codebase.",
+    "In fastai/core.py: Remove the `load2` function (line 113) - defined but never called anywhere.",
+    "In fastai/core.py: Remove the `load_array` function (line 115) - defined but never called from within the package.",
+    "In fastai/core.py: Remove the `partition_by_cores` function (lines 80-81) - defined but never called anywhere.",
+    "In fastai/core.py: Remove the `SimpleNet` class (lines 97-107) - defined but never instantiated anywhere in the codebase.",
+    "In fastai/metrics.py: Remove the `accuracy_np` function (lines 4-6) - defined but never called anywhere.",
+    "In fastai/transforms.py: Remove the duplicate `noop` function (line 454) - the version in core.py is the one actually used (by rnn_reg.py). This one in transforms.py is never referenced.",
+    "In fastai/transforms.py: Remove the `det_dihedral`, `det_stretch`, `det_lighting`, `det_rotate`, `det_zoom` functions (lines 68-72) - defined but never called anywhere in the codebase.",
+    "In fastai/text.py: Remove the commented-out `texts_from_files` function block (lines 28-34) - commented-out dead code.",
+    "In fastai/plots.py: Remove the `plots_raw` function (lines 66-72) - defined but never called anywhere.",
+    "In fastai/plots.py: Remove the `load_img_id` function (line 74) - defined but never called anywhere.",
+    "In fastai/adaptive_softmax.py: Remove unused `from math import sqrt` import (line 2) - sqrt is never used in the file.",
+    "In fastai/io.py: Remove unused `import gzip` (line 4) - gzip is never used in the file.",
+    "Delete fastai/rnn_train.py entirely - the file only contains imports and has no definitions. It is never imported from anywhere.",
+    "Verify all modified files parse correctly with: python -c \"import ast; ast.parse(open('fastai/<file>.py').read())\""
+  ],
+  "acceptance_criteria": [
+    "All modified Python files parse without syntax errors",
+    "No functions/variables/imports that were actually used elsewhere are removed",
+    "The commented-out code block in text.py is removed",
+    "The empty rnn_train.py file is deleted",
+    "All remaining code in modified files maintains proper structure (no dangling references, proper line spacing)"
+  ],
+  "verification": [
+    "Run: python -c \"import ast, glob; [ast.parse(open(f).read()) for f in glob.glob('fastai/*.py')]\" to confirm all files parse correctly",
+    "Run: grep -rn 'conv_dict\\|load2\\|load_array\\|partition_by_cores\\|SimpleNet\\|accuracy_np\\|plots_raw\\|load_img_id\\|det_dihedral\\|det_stretch\\|det_lighting\\|det_rotate\\|det_zoom' fastai/*.py to confirm dead code was removed"
+  ],
+  "blocked_reason": null,
+  "findings": "Pre-existing syntax error in core.py: 'async=True' is invalid in Python 3.7+. All available Python versions (3.10+) fail to parse core.py due to this pre-existing issue. Verified by stashing changes and confirming the same parse error on the base state. All other modified files parse cleanly with AST validation."
+}

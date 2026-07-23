@@ -1,0 +1,7 @@
+{
+  "task_id": "task-remove-dead-code",
+  "task_description": "Identify and remove dead code from the fastai package: unused functions, unused variables, commented-out code blocks, unused imports, and empty module files.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001"],
+  "blocked_reason": null
+}

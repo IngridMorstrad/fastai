@@ -1,0 +1,25 @@
+{
+  "project_type": "Python deep learning library (PyTorch-based)",
+  "language": "Python",
+  "build_system": "setup.py with pip install",
+  "test_framework": "No test suite in the repository",
+  "build_command": "python -c 'import ast; import sys; [ast.parse(open(f).read()) for f in sys.argv[1:]]' fastai/*.py",
+  "test_command": "python -c 'import ast; import sys; [ast.parse(open(f).read()) for f in sys.argv[1:]]' fastai/*.py",
+  "verification_instructions": "Parse all .py files in fastai/ with Python AST to confirm no syntax errors were introduced",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "No environment setup needed - using AST validation only since dependencies (PyTorch, etc) are not installable in this environment",
+  "environment_constraints": "Cannot install PyTorch and other heavy dependencies - use AST-based validation to confirm code remains syntactically correct",
+  "contribution_requirements": "No CONTRIBUTING.md present. Standard practices: do not remove public API that external users might call.",
+  "key_patterns": "Files use star imports (from .imports import *), modules reference each other heavily. The package is in fastai/fastai/.",
+  "relevant_files": [
+    "fastai/core.py",
+    "fastai/transforms.py",
+    "fastai/metrics.py",
+    "fastai/plots.py",
+    "fastai/text.py",
+    "fastai/rnn_train.py",
+    "fastai/io.py",
+    "fastai/adaptive_softmax.py"
+  ],
+  "directory_structure": "fastai/ is the main package source. courses/ and tutorials/ are separate. models/ contains pre-trained model definitions."
+}
