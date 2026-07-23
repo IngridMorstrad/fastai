@@ -26,9 +26,9 @@ jobs:
       - name: Install and check nbdev sync
         run: |
           set -ux
-          python -m pip install --upgrade pip setuptools
-          pip install git+https://github.com/fastai/fastcore.git@master
-          pip install git+https://github.com/fastai/nbdev.git@master
+          python -m pip install --upgrade pip "setuptools<83" wheel packaging
+          pip install --no-build-isolation git+https://github.com/fastai/fastcore.git@master
+          pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@master
           pip install -e ".[dev]" --extra-index-url https://download.pytorch.org/whl/cpu
           echo "Check we are starting with clean git checkout"
           if [[ `git status --porcelain -uno` ]]; then
