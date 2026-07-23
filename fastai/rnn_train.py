@@ -1,5 +1,2 @@
-import torch
-import torch.nn as nn
-from torch.autograd import Variable
-from .core import *
-
+# This file is kept for backward compatibility with course notebooks
+# that use: from fastai.rnn_train import *
