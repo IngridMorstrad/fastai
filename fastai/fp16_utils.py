@@ -85,9 +85,6 @@ class FP16Model(nn.Module):
         return self.network(*inputs)
 
 
-def backwards_debug_hook(grad):
-    raise RuntimeError("master_params recieved a gradient in the backward pass!")
-
 def prep_param_lists(model, flat_master=False):
     """
     Creates a list of FP32 master parameters for a given model, as in
@@ -123,7 +120,6 @@ def prep_param_lists(model, flat_master=False):
             raise
         master_params = torch.nn.Parameter(master_params)
         master_params.requires_grad = True
-        # master_params.register_hook(backwards_debug_hook)
         if master_params.grad is None:
             master_params.grad = master_params.new(*master_params.size())
         return model_params, [master_params]
@@ -171,11 +167,3 @@ def master_params_to_model_params(model_params, master_params, flat_master=False
     else:
         for model, master in zip(model_params, master_params):
             model.data.copy_(master.data)
-
-# Backward compatibility fixes
-
-def to_python_float(t):
-    if hasattr(t, 'item'):
-        return t.item()
-    else:
-        return t[0]

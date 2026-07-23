@@ -21,7 +21,7 @@ def json_clean(o):
 jsonutil.json_clean = json_clean
 
 # %% ../../nbs/70c_callback.captum.ipynb 8
-from captum.attr import IntegratedGradients,NoiseTunnel,GradientShap,Occlusion
+from captum.attr import IntegratedGradients,NoiseTunnel,Occlusion
 from captum.attr import visualization as viz
 
 from matplotlib.colors import LinearSegmentedColormap
