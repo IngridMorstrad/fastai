@@ -152,7 +152,6 @@ def tensor(x, *rest, **kwargs):
            else torch.tensor(x, **kwargs) if isinstance(x, (tuple,list,numbers.Number))
            else _array2tensor(x, **kwargs) if isinstance(x, ndarray)
            else as_tensor(x.values, **kwargs) if isinstance(x, (pd.Series, pd.DataFrame))
-#            else as_tensor(array(x, **kwargs)) if hasattr(x, '__array__') or is_iter(x)
            else _array2tensor(array(x), **kwargs))
     if res.dtype is torch.float64: return res.float()
     return res
