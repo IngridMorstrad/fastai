@@ -3,10 +3,6 @@ from .torch_imports import *
 
 def sum_geom(a,r,n): return a*n if r==1 else math.ceil(a*(1-r**n)/(1-r))
 
-conv_dict = {np.dtype('int8'): torch.LongTensor, np.dtype('int16'): torch.LongTensor,
-    np.dtype('int32'): torch.LongTensor, np.dtype('int64'): torch.LongTensor,
-    np.dtype('float32'): torch.FloatTensor, np.dtype('float64'): torch.FloatTensor}
-
 def T(a):
     if torch.is_tensor(a): res = a
     else:

@@ -25,15 +25,6 @@ def texts_labels_from_folders(path, folders):
             labels.append(idx)
     return texts, np.array(labels).astype(np.int64)
 
-#def texts_from_files(src, names):
-    #texts,labels = [],[]
-    #for idx,name in enumerate(names):
-        #path = os.path.join(src, name)
-        #t = [o.strip() for o in open(path, encoding = "ISO-8859-1")]
-        #texts += t
-        #labels += ([idx] * len(t))
-    #return texts,np.array(labels)
-
 class Tokenizer():
     re_rep = re.compile(r'(\S)(\1{3,})')
     re_word_rep = re.compile(r'(\b\w+\W+)(\1{3,})')
@@ -59,9 +50,7 @@ class Tokenizer():
         re_nonsp = re.compile('\S')
         for s in re.findall(r'\w+|\W+', ss):
             res += ([TOK_UP,s.lower()] if (s.isupper() and (len(s)>2))
-    #                 else [TOK_SENT,s.lower()] if (s.istitle() and re_word.search(prev))
                     else [s.lower()])
-    #         if re_nonsp.search(s): prev = s
         return ''.join(res)
 
     def proc_text(self, s):
