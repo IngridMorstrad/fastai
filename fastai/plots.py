@@ -63,15 +63,6 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix'
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
 
-def plots_raw(ims, figsize=(12,6), rows=1, titles=None):
-    f = plt.figure(figsize=figsize)
-    for i in range(len(ims)):
-        sp = f.add_subplot(rows, ceildiv(len(ims), rows), i+1)
-        sp.axis('Off')
-        if titles is not None: sp.set_title(titles[i], fontsize=16)
-        plt.imshow(ims[i])
-
-def load_img_id(ds, idx, path): return np.array(PIL.Image.open(os.path.join(path, ds.fnames[idx])))
 
 
 class ImageModelResults():

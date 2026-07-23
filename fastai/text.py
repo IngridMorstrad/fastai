@@ -25,14 +25,6 @@ def texts_labels_from_folders(path, folders):
             labels.append(idx)
     return texts, np.array(labels).astype(np.int64)
 
-#def texts_from_files(src, names):
-    #texts,labels = [],[]
-    #for idx,name in enumerate(names):
-        #path = os.path.join(src, name)
-        #t = [o.strip() for o in open(path, encoding = "ISO-8859-1")]
-        #texts += t
-        #labels += ([idx] * len(t))
-    #return texts,np.array(labels)
 
 class Tokenizer():
     re_rep = re.compile(r'(\S)(\1{3,})')

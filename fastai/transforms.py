@@ -65,12 +65,6 @@ def scale_to(x, ratio, targ): return max(math.floor(x*ratio), targ)
 
 def crop(im, r, c, sz): return im[r:r+sz, c:c+sz]
 
-def det_dihedral(dih): return lambda x: dihedral(x, dih)
-def det_stretch(sr, sc): return lambda x: stretch_cv(x, sr, sc)
-def det_lighting(b, c): return lambda x: lighting(x, b, c)
-def det_rotate(deg): return lambda x: rotate_cv(x, deg)
-def det_zoom(zoom): return lambda x: zoom_cv(x, zoom)
-
 def rand0(s): return random.random()*(s*2)-s
 
 class Denormalize():
@@ -451,7 +445,6 @@ def image_gen(normalizer, denorm, sz, transforms=None, max_zoom=None, pad=0, cro
     if (max_zoom is not None or pad!=0) and crop_type is None: crop_type = CropType.RANDOM
     return Transforms(sz, scale + transforms, normalizer, denorm, crop_type, tfm_y)
 
-def noop(x): return x
 
 # TODO: find a different solution now that we have tfm_y
 transforms_basic    = [RandomRotate(10), RandomLighting(0.05, 0.05)]
