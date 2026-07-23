@@ -5,13 +5,6 @@ from .transforms import *
 from .layer_optimizer import *
 from .dataloader import DataLoader
 
-def get_cross_validation_idxs(n, cross_validation_idx=0, val_pct=0.2, seed=42):
-    np.random.seed(seed)
-    n_val = int(val_pct*n)
-    idx_start = cross_validation_idx*n_val
-    idxs = np.random.permutation(n)
-    return idxs[idx_start:idx_start+n_val]
-
 def resize_img(filename, targ, path, new_path):
     dest = os.path.join(path,new_path,str(targ),filename)
     if os.path.exists(dest): return
