@@ -54,11 +54,6 @@ def is_iter(o):
     #Rank 0 tensors in PyTorch are not really iterable
     return isinstance(o, (Iterable,Generator)) and getattr(o,'ndim',1)
 
-def is_coll(o):
-    "Test whether `o` is a collection (i.e. has a usable `len`)"
-    #Rank 0 tensors in PyTorch do not have working `len`
-    return hasattr(o, '__len__') and getattr(o,'ndim',1)
-
 def all_equal(a,b):
     "Compares whether `a` and `b` are the same length and have the same contents"
     if not is_iter(b): return False
