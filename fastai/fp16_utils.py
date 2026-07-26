@@ -39,8 +39,8 @@ def model_grads_to_master_grads(model_params, master_params, flat_master=False):
     Copy model gradients to master gradients.  
 
     Args:
-        model_params:  List of model parameters created by :func:`prep_param_lists`.
-        master_params:  List of FP32 master parameters created by :func:`prep_param_lists`.  If ``master_params`` was created with ``flat_master=True``, ``flat_master=True`` should also be supplied to :func:`model_grads_to_master_grads`.
+        model_params:  List of model parameters (typically FP16).
+        master_params:  List of FP32 master parameters.  If ``flat_master=True``, this should be a single-element list containing the flattened FP32 parameter tensor.
     """
     if flat_master:
         # The flattening may incur one more deep copy than is necessary.
@@ -61,8 +61,8 @@ def master_params_to_model_params(model_params, master_params, flat_master=False
     Copy master parameters to model parameters.
 
     Args:
-        model_params:  List of model parameters created by :func:`prep_param_lists`.
-        master_params:  List of FP32 master parameters created by :func:`prep_param_lists`.  If ``master_params`` was created with ``flat_master=True``, ``flat_master=True`` should also be supplied to :func:`master_params_to_model_params`.
+        model_params:  List of model parameters (typically FP16).
+        master_params:  List of FP32 master parameters.  If ``flat_master=True``, this should be a single-element list containing the flattened FP32 parameter tensor.
     """
     if flat_master:
         for model, master in zip(model_params, 
