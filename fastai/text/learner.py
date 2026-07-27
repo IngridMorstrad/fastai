@@ -67,7 +67,6 @@ def _rm_module(n:str):
     return '.'.join(t)
 
 # %% ../../nbs/37_text.learner.ipynb 15
-#For previous versions compatibility, remove for release
 def clean_raw_keys(wgts:dict):
     keys = list(wgts.keys())
     for k in keys:
@@ -76,7 +75,6 @@ def clean_raw_keys(wgts:dict):
     return wgts
 
 # %% ../../nbs/37_text.learner.ipynb 16
-#For previous versions compatibility, remove for release
 def load_model_text(
     file:str, # File name of saved text model
     model, # Model architecture
@@ -153,7 +151,6 @@ class TextLearner(Learner):
         self.freeze()
         return self
 
-    #For previous versions compatibility. Remove at release
     @delegates(load_model_text)
     def load(self, 
         file:str, # Filename of saved model 
