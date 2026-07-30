@@ -16,7 +16,6 @@ __all__ = ['synth_dbunch', 'RegModel', 'synth_learner', 'VerboseCallback', 'get_
            'show_install']
 
 # %% ../nbs/97_test_utils.ipynb 3
-from torch.utils.data import TensorDataset
 
 # %% ../nbs/97_test_utils.ipynb 4
 def synth_dbunch(a=2, b=3, bs=16, n_train=10, n_valid=2, cuda=False):
