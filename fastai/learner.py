@@ -60,11 +60,6 @@ def load_model(file, model, opt, with_opt=True, device=None, strict=True, **torc
             if with_opt: warn("Could not load the optimizer state.")
     elif with_opt: warn("Saved file doesn't contain an optimizer state.")
 
-# %% ../nbs/13a_learner.ipynb 19
-def _try_concat(o):
-    try:    return torch.cat(o)
-    except: return sum([L(o_[i,:] for i in range_of(o_)) for o_ in o], L())
-
 # %% ../nbs/13a_learner.ipynb 20
 _before_epoch = [event.before_fit, event.before_epoch]
 _after_epoch  = [event.after_epoch, event.after_fit]

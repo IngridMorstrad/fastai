@@ -112,11 +112,6 @@ def _add_projector_features(learn, hook, feat):
         feat['lbl'] = learn.y if first_epoch else torch.cat((feat['lbl'], learn.y),0)
     return feat
 
-# %% ../../nbs/70a_callback.tensorboard.ipynb 27
-def _get_embeddings(model, layer):
-    layer = model[0].encoder if layer == None else layer
-    return layer.weight
-
 # %% ../../nbs/70a_callback.tensorboard.ipynb 28
 @typedispatch
 def _normalize_for_projector(x:TensorImage):
