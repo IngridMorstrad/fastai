@@ -236,19 +236,6 @@ class GANTrainer(Callback):
         "Put the critic or the generator back to eval if necessary."
         self.switch(self.gen_mode)
 
-    #def after_epoch(self):
-    #    "Show a sample image."
-    #    if not hasattr(self, 'last_gen') or not self.show_img: return
-    #    data = self.learn.data
-    #    img = self.last_gen[0]
-    #    norm = getattr(data,'norm',False)
-    #    if norm and norm.keywords.get('do_y',False): img = data.denorm(img)
-    #    img = data.train_ds.y.reconstruct(img)
-    #    self.imgs.append(img)
-    #    self.titles.append(f'Epoch {epoch}')
-    #    pbar.show_imgs(self.imgs, self.titles)
-    #    return add_metrics(last_metrics, [getattr(self.smoothenerG,'smooth',None),getattr(self.smoothenerC,'smooth',None)])
-
     def switch(self, gen_mode=None):
         "Switch the model and loss function, if `gen_mode` is provided, in the desired mode."
         self.gen_mode = (not self.gen_mode) if gen_mode is None else gen_mode
