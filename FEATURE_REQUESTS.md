@@ -26,7 +26,7 @@ For discussions about features before implementation, please use the [fastai for
 
 ## Callbacks
 
-- Add a built-in EarlyStopping callback that supports monitoring multiple metrics with configurable logic (any/all)
+- [DONE] Add a built-in EarlyStopping callback that supports monitoring multiple metrics with configurable logic (any/all) -- implemented as `MultiMetricEarlyStoppingCallback`
 
 ## Deployment & Export
 

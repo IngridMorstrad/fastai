@@ -9,7 +9,8 @@ from .progress import *
 from .fp16 import MixedPrecision
 
 # %% auto 0
-__all__ = ['TerminateOnNaNCallback', 'TrackerCallback', 'EarlyStoppingCallback', 'SaveModelCallback', 'ReduceLROnPlateau']
+__all__ = ['TerminateOnNaNCallback', 'TrackerCallback', 'EarlyStoppingCallback', 'MultiMetricEarlyStoppingCallback', 'SaveModelCallback',
+           'ReduceLROnPlateau']
 
 # %% ../../nbs/17_callback.tracker.ipynb 6
 class TerminateOnNaNCallback(Callback):
@@ -72,6 +73,74 @@ class EarlyStoppingCallback(TrackerCallback):
             if self.wait >= self.patience:
                 print(f'No improvement since epoch {self.epoch-self.wait}: early stopping')
                 raise CancelFitException()
+
+# %% ../../nbs/17_callback.tracker.ipynb 23
+class MultiMetricEarlyStoppingCallback(Callback):
+    "A `Callback` that terminates training when multiple monitored metrics stop improving."
+    order = TrackerCallback.order+3
+    def __init__(self,
+        monitors=('valid_loss',), # list of values (losses or metrics) to monitor.
+        comp=None, # list of numpy comparison operators, one per monitor; defaults based on monitor name.
+        min_delta=0., # minimum delta for improvement; scalar applied to all, or list per monitor.
+        patience=1, # number of epochs to wait when training has not improved.
+        logic='all', # 'all' means stop only when ALL metrics stagnate; 'any' means stop when ANY metric stagnates.
+        reset_on_fit=True # before model fitting, reset monitored values.
+    ):
+        assert logic in ('all', 'any'), "logic must be 'all' or 'any'"
+        self.monitors = list(monitors)
+        n = len(self.monitors)
+        # Set up comparators
+        if comp is None:
+            self.comps = [np.less if ('loss' in m or 'error' in m) else np.greater for m in self.monitors]
+        else:
+            self.comps = list(comp) if hasattr(comp, '__iter__') else [comp] * n
+        # Set up min_delta per monitor
+        if isinstance(min_delta, (list, tuple)):
+            self.min_deltas = list(min_delta)
+        else:
+            self.min_deltas = [min_delta * (-1 if c == np.less else 1) for c in self.comps]
+        # Adjust sign for scalar case
+        if not isinstance(min_delta, (list, tuple)):
+            pass  # already handled above
+        else:
+            self.min_deltas = [d * (-1 if c == np.less else 1) for d, c in zip(self.min_deltas, self.comps)]
+        self.patience = patience
+        self.logic = logic
+        self.reset_on_fit = reset_on_fit
+
+    def before_fit(self):
+        "Prepare monitored values"
+        self.run = not hasattr(self, "lr_finder") and not hasattr(self, "gather_preds")
+        n = len(self.monitors)
+        if self.reset_on_fit or not hasattr(self, 'bests'):
+            self.bests = [float('inf') if c == np.less else -float('inf') for c in self.comps]
+        self.waits = [0] * n
+        # Validate all monitors exist
+        for m in self.monitors:
+            assert m in self.recorder.metric_names[1:], f"Monitor '{m}' not found in metrics"
+        self.idxs = [list(self.recorder.metric_names[1:]).index(m) for m in self.monitors]
+
+    def after_epoch(self):
+        "Compare each monitored value to its best and maybe stop training."
+        stagnant = []
+        for i, (idx, comp, min_delta, best) in enumerate(
+            zip(self.idxs, self.comps, self.min_deltas, self.bests)
+        ):
+            val = self.recorder.values[-1][idx]
+            if comp(val - min_delta, best):
+                self.bests[i] = val
+                self.waits[i] = 0
+                stagnant.append(False)
+            else:
+                self.waits[i] += 1
+                stagnant.append(self.waits[i] >= self.patience)
+
+        should_stop = all(stagnant) if self.logic == 'all' else any(stagnant)
+        if should_stop:
+            print(f'No improvement since epoch {self.epoch-max(self.waits)}: early stopping (logic={self.logic})')
+            raise CancelFitException()
+
+    def after_fit(self): self.run = True
 
 # %% ../../nbs/17_callback.tracker.ipynb 26
 class SaveModelCallback(TrackerCallback):
