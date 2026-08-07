@@ -25,8 +25,8 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          pip install -U nbdev
           pip install -Uqe .
+          pip install -U nbdev
       - name: Check nbdev sync
         run: |
           nbdev_export
