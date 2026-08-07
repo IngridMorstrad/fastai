@@ -26,12 +26,11 @@ jobs:
       - name: Install dependencies
         run: |
           pip install "setuptools<72" wheel
-          pip install --no-build-isolation git+https://github.com/fastai/fastcore.git@master
-          pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@main
+          pip install "nbdev>=2.2,<3" "fastcore>=1.5.29"
           pip install --no-deps -e .
       - name: Check nbdev sync
         run: |
-          python -m nbdev.export
+          nbdev_export
           if [[ `git status --porcelain -uno` ]]; then
             echo "::error::Notebooks and library are not in sync. Please run nbdev_export."
             git status -uno
@@ -64,8 +63,7 @@ jobs:
     - name: Install libraries
       run: |
         pip install "setuptools<72" wheel
-        pip install --no-build-isolation git+https://github.com/fastai/fastcore.git@master
-        pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@main
+        pip install "nbdev>=2.2,<3" "fastcore>=1.5.29"
         pip install -Uq fastprogress
         pip install -Uqe .[dev] --extra-index-url https://download.pytorch.org/whl/cpu
 
@@ -84,12 +82,6 @@ jobs:
         ipython download_testdata.py
         mkdir -p $HOME/.fastai/data
         find $HOME/.fastai/archive/ -name "*.tgz" -exec tar -xzvf {} -C $HOME/.fastai/data \;
-    - name: Migrate settings.ini to pyproject.toml for nbdev 3.x compatibility
-      run: |
-        if [ -f settings.ini ]; then
-          nbdev-migrate-config
-        fi
 
     - name: Test notebooks batch ${{matrix.nb_dec}}${{matrix.nb_unit}}
-      run: python -m nbdev.test --flags '' --n_workers 3 --pause 1.0 --file_re "${{matrix.nb_dec}}${{matrix.nb_unit}}.*"
-
+      run: nbdev_test --flags '' --n_workers 3 --pause 1.0 --file_re "${{matrix.nb_dec}}${{matrix.nb_unit}}.*"
