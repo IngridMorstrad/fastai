@@ -11,9 +11,7 @@ __all__ = ['TensorBoardBaseCallback', 'TensorBoardCallback', 'TensorBoardProject
            'tensorboard_log']
 
 # %% ../../nbs/70a_callback.tensorboard.ipynb 18
-import tensorboard
 from torch.utils.tensorboard import SummaryWriter
-from .fp16 import ModelToHalf
 from .hook import hook_output
 
 # %% ../../nbs/70a_callback.tensorboard.ipynb 19

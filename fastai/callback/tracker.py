@@ -6,7 +6,6 @@
 from __future__ import annotations
 from ..basics import *
 from .progress import *
-from .fp16 import MixedPrecision
 
 # %% auto 0
 __all__ = ['TerminateOnNaNCallback', 'TrackerCallback', 'EarlyStoppingCallback', 'MultiMetricEarlyStoppingCallback', 'SaveModelCallback',

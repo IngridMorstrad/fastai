@@ -19,7 +19,6 @@ __all__ = ['TensorTypes', 'RandTransform', 'FlipItem', 'DihedralItem', 'CropPad'
 
 # %% ../../nbs/09_vision.augment.ipynb 5
 from torch import stack, zeros_like as t0, ones_like as t1
-from torch.distributions.bernoulli import Bernoulli
 
 # %% ../../nbs/09_vision.augment.ipynb 8
 class RandTransform(DisplayedTransform):

@@ -19,9 +19,23 @@ jobs:
   test-nbdev-sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: fastai/workflows/nbdev-ci@master
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          skip_test: true
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install -U nbdev
+          pip install -Uqe .
+      - name: Check nbdev sync
+        run: |
+          nbdev_export
+          if [[ `git status --porcelain -uno` ]]; then
+            echo "::error::Notebooks and library are not in sync. Please run nbdev_export."
+            git status -uno
+            git diff
+            exit 1
+          fi
 
   test-notebooks:
     needs: test-nbdev-sync

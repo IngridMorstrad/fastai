@@ -5,7 +5,6 @@
 # %% ../../nbs/14_callback.schedule.ipynb 2
 from __future__ import annotations
 from ..basics import *
-from .tracker import SaveModelCallback
 
 # %% auto 0
 __all__ = ['annealer', 'sched_lin', 'sched_cos', 'sched_no', 'sched_exp', 'SchedLin', 'SchedCos', 'SchedNo', 'SchedExp',

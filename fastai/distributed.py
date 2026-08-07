@@ -7,8 +7,7 @@ from __future__ import annotations
 from .basics import *
 from .callback.progress import ProgressCallback
 from torch.nn.parallel import DistributedDataParallel, DataParallel
-from .data.load import _FakeLoader,_loaders
-from .optimizer import OptimWrapper
+from .data.load import _FakeLoader
 try: from accelerate import Accelerator
 except ModuleNotFoundError: pass
 
