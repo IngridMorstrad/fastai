@@ -29,7 +29,7 @@ jobs:
           pip install -U nbdev
       - name: Check nbdev sync
         run: |
-          nbdev_export
+          python -m nbdev.export
           if [[ `git status --porcelain -uno` ]]; then
             echo "::error::Notebooks and library are not in sync. Please run nbdev_export."
             git status -uno
