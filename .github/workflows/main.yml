@@ -1,85 +1,33 @@
 name: CI
 on:
-  workflow_dispatch: #allows repo admins to trigger this workflow from the Actions tab
+  workflow_dispatch:
   pull_request:
   push:
     branches:
       - master
     paths-ignore:
-      - '.github/**'
-      - '!.github/workflows/main.yml'
       - 'docs/**'
       - '*.md'
       - '.git*'
 
 permissions:
-  contents: read # to fetch code (actions/checkout)
+  contents: read
 
 jobs:
-  test-nbdev-sync:
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          pip install -Uqe .
-          pip install "nbdev<3" "execnb<0.2"
-      - name: Check nbdev sync
-        run: |
-          nbdev_export
-          if [[ `git status --porcelain -uno` ]]; then
-            echo "::error::Notebooks and library are not in sync. Please run nbdev_export."
-            git status -uno
-            git diff
-            exit 1
-          fi
-
-  test-notebooks:
-    needs: test-nbdev-sync
-    runs-on: ubuntu-latest
-    env:
-      download: "true"
-      caching: "true"
-    strategy:
-      matrix:
-        py:  ["3.10", "3.11", "3.12"]
-        nb_dec : ['[0-2]','[3-5]','[6-9]']
-        nb_unit: ['[0-2]','[3-5]','[6-9]']
-    steps:
-    - name: checkout contents of PR
-      uses: actions/checkout@v4
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.py }}
-        cache: "pip"
-        cache-dependency-path: settings.ini
-
-    - name: Install libraries
-      run: |
-        pip install -U fastcore
-        pip install "nbdev<3" "execnb<0.2"
-        pip install -Uq fastprogress
-        pip install -Uqe .[dev] --extra-index-url https://download.pytorch.org/whl/cpu
-
-    - name: check for cache hit
-      uses: actions/cache@v4
-      if: env.caching == 'true'
-      id: cache
-      with:
-        path: ~/.fastai/data
-        key: 'fastai-test-data-v3'
-
-    - name: download data
-      if: env.download == 'true' && steps.cache.outputs.cache-hit != 'true'
-      run: |
-        wget https://raw.githubusercontent.com/fastai/docker-containers/master/fastai/tmp_scripts/download_testdata.py
-        ipython download_testdata.py
-        mkdir -p $HOME/.fastai/data
-        find $HOME/.fastai/archive/ -name "*.tgz" -exec tar -xzvf {} -C $HOME/.fastai/data \;
-    - name: Test notebooks batch ${{matrix.nb_dec}}${{matrix.nb_unit}}
-      run: nbdev_test --flags '' --n_workers 3 --pause 1.0 --file_re "${{matrix.nb_dec}}${{matrix.nb_unit}}.*"
-
+          pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev]"
+          pip install pytest
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
