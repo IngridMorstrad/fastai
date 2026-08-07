@@ -28,7 +28,7 @@ jobs:
           pip install "setuptools<72" wheel
           pip install --no-build-isolation git+https://github.com/fastai/fastcore.git@master
           pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@main
-          pip install --no-build-isolation -Uqe .
+          pip install --no-deps -e .
       - name: Check nbdev sync
         run: |
           nbdev_export
