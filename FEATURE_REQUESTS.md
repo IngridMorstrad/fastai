@@ -12,6 +12,8 @@ For discussions about features before implementation, please use the [fastai for
 
 - Support learning rate finder (`lr_find`) with multiple losses displayed on the same plot for multi-task models
 
+- Add gradient accumulation support as a first-class Learner parameter to enable large effective batch sizes on memory-constrained GPUs
+
 ## Vision
 
 - Add native support for ONNX model export with dynamic batch-size axes directly from `Learner`
