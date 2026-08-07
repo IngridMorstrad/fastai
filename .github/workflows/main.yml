@@ -25,8 +25,9 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
+          pip install git+https://github.com/fastai/fastcore.git@master
+          pip install git+https://github.com/fastai/nbdev.git@master
           pip install -Uqe .
-          pip install -U nbdev
       - name: Check nbdev sync
         run: |
           nbdev_export
