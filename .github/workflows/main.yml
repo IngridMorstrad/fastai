@@ -17,6 +17,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
@@ -26,8 +27,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
+          pip install "setuptools<72" wheel
           pip install "torch>=2.0,<2.6" "torchvision>=0.15,<0.21" --index-url https://download.pytorch.org/whl/cpu
-          pip install -e ".[dev]"
+          pip install --no-deps -e .
+          pip install "fastcore>=1.5.29,<1.8" "fastdownload>=0.0.5,<2" matplotlib pandas requests pyyaml "fastprogress>=0.2.4" "pillow>=9.0.0" scikit-learn scipy packaging
           pip install pytest
       - name: Run tests
         run: pytest tests/ -v --tb=short --ignore=tests/test_torch_core.py
