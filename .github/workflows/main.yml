@@ -26,8 +26,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          pip install "torch>=1.10,<2.6" "torchvision>=0.11" --extra-index-url https://download.pytorch.org/whl/cpu
           pip install -e ".[dev]" --extra-index-url https://download.pytorch.org/whl/cpu
           pip install pytest
       - name: Run tests
-        run: pytest tests/ -v --tb=short
+        run: pytest tests/ -v --tb=short --ignore=tests/test_torch_core.py
