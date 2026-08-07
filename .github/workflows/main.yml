@@ -25,6 +25,7 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
+          pip install -U setuptools
           pip install git+https://github.com/fastai/fastcore.git@master
           pip install git+https://github.com/fastai/nbdev.git@master
           pip install -Uqe .
