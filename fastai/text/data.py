@@ -70,13 +70,13 @@ def _get_lengths(ds):
     return tok.get_lengths(ds.items)
 
 # %% ../../nbs/31_text.data.ipynb 25
-#TODO: add backward
 @delegates()
 class LMDataLoader(TfmdDL):
     "A `DataLoader` suitable for language modeling"
-    def __init__(self, dataset, lens=None, cache=2, bs=64, seq_len=72, num_workers=0, **kwargs):
+    def __init__(self, dataset, lens=None, cache=2, bs=64, seq_len=72, num_workers=0, backwards=False, **kwargs):
         self.items = ReindexCollection(dataset, cache=cache, tfm=_maybe_first)
         self.seq_len = seq_len
+        self.backwards = backwards
         if lens is None: lens = _get_lengths(dataset)
         if lens is None: lens = [len(o) for o in self.items]
         self.lens = ReindexCollection(lens, idxs=self.items.idxs)
@@ -101,13 +101,15 @@ class LMDataLoader(TfmdDL):
         sl = self.last_len if seq//self.bs==self.n_batches-1 else self.seq_len
         st = (seq%self.bs)*self.bl + (seq//self.bs)*self.seq_len
         txt = self.chunks[st : st+sl+1]
+        if self.backwards: txt = reverse_text(txt)
         return LMTensorText(txt[:-1]),txt[1:]
 
     @delegates(TfmdDL.new)
-    def new(self, dataset=None, seq_len=None, **kwargs):
+    def new(self, dataset=None, seq_len=None, backwards=None, **kwargs):
         lens = self.lens.coll if dataset is None else None
         seq_len = self.seq_len if seq_len is None else seq_len
-        return super().new(dataset=dataset, lens=lens, seq_len=seq_len, **kwargs)
+        backwards = self.backwards if backwards is None else backwards
+        return super().new(dataset=dataset, lens=lens, seq_len=seq_len, backwards=backwards, **kwargs)
 
 # %% ../../nbs/31_text.data.ipynb 35
 @typedispatch
