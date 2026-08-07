@@ -31,7 +31,11 @@ jobs:
           pip install --no-deps -e .
       - name: Check nbdev sync
         run: |
-          nbdev_export
+          echo "PATH=$PATH"
+          which python
+          python -m site --user-base
+          ls $(python -c "import sysconfig; print(sysconfig.get_path('scripts'))")/nbdev* || true
+          python -m nbdev.export
           if [[ `git status --porcelain -uno` ]]; then
             echo "::error::Notebooks and library are not in sync. Please run nbdev_export."
             git status -uno
