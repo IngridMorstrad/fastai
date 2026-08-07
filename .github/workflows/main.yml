@@ -31,11 +31,7 @@ jobs:
           pip install --no-deps -e .
       - name: Check nbdev sync
         run: |
-          echo "PATH=$PATH"
-          which python
-          python -m site --user-base
-          ls $(python -c "import sysconfig; print(sysconfig.get_path('scripts'))")/nbdev* || true
-          python -m nbdev.export
+          nbdev-export
           if [[ `git status --porcelain -uno` ]]; then
             echo "::error::Notebooks and library are not in sync. Please run nbdev_export."
             git status -uno
@@ -66,8 +62,9 @@ jobs:
 
     - name: Install libraries
       run: |
-        pip install git+https://github.com/fastai/fastcore.git@master
-        pip install git+https://github.com/fastai/nbdev.git@master
+        pip install "setuptools<72" wheel
+        pip install --no-build-isolation git+https://github.com/fastai/fastcore.git@master
+        pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@main
         pip install -Uq fastprogress
         pip install -Uqe .[dev] --extra-index-url https://download.pytorch.org/whl/cpu
 
@@ -87,5 +84,5 @@ jobs:
         mkdir -p $HOME/.fastai/data
         find $HOME/.fastai/archive/ -name "*.tgz" -exec tar -xzvf {} -C $HOME/.fastai/data \;
     - name: Test notebooks batch ${{matrix.nb_dec}}${{matrix.nb_unit}}
-      run: nbdev_test --flags '' --n_workers 3 --pause 1.0 --file_re "${{matrix.nb_dec}}${{matrix.nb_unit}}.*"
+      run: nbdev-test --flags '' --n_workers 3 --pause 1.0 --file_re "${{matrix.nb_dec}}${{matrix.nb_unit}}.*"
 
