@@ -8,6 +8,7 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `SentencePieceTokenizer` does not forward special token symbols to the underlying SentencePiece model (`fastai/text/core.py`)
 - `Learner.summary` does not count parameters for individual `ParameterModule` instances wrapped outside of hook-tracked layers (`fastai/callback/hook.py`)
 - `TfmdDL` padding uses `L.items.index` instead of `L.index` due to an unresolved upstream bug in `L` (`fastai/text/data.py`)
+- `MixedPrecision` imports `GradScaler` and `autocast` from deprecated `torch.cuda.amp` path; these emit `FutureWarning` on PyTorch 2.4+ and will be removed in 2.6 (`fastai/callback/fp16.py`)
 
 ## Fixed
 
