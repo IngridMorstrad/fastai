@@ -31,12 +31,6 @@ from pdb import set_trace
 from fastcore.all import *
 from fastprogress.fastprogress import progress_bar,master_bar
 
-# In fastcore 2.x, cast/retain_type/etc. moved to fasttransform
-try:
-    from fasttransform import *
-except ImportError:
-    pass
-
 try:
     from types import WrapperDescriptorType,MethodWrapperType,MethodDescriptorType
 except ImportError:
