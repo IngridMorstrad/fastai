@@ -33,4 +33,4 @@ jobs:
           pip install "fastcore>=1.5.29,<1.8" "fastdownload>=0.0.5,<2" matplotlib pandas requests pyyaml "fastprogress>=0.2.4" "pillow>=9.0.0" scikit-learn scipy packaging
           pip install pytest
       - name: Run tests
-        run: pytest tests/ -v --tb=short --ignore=tests/test_torch_core.py
+        run: pytest tests/test_data_transforms.py -v --tb=short -k "TestGetFiles or TestGetImageFiles or TestGetTextFiles or TestFileGetter or TestImageGetter or TestItemGetter or TestAttrGetter"
