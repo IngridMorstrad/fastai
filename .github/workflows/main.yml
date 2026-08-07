@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -Uqe .
-          pip install -U nbdev
+          pip install "nbdev<3"
       - name: Check nbdev sync
         run: |
           python -m nbdev.export
@@ -61,7 +61,7 @@ jobs:
     - name: Install libraries
       run: |
         pip install -U fastcore
-        pip install -U nbdev
+        pip install "nbdev<3"
         pip install -Uq fastprogress
         pip install -Uqe .[dev] --extra-index-url https://download.pytorch.org/whl/cpu
 
