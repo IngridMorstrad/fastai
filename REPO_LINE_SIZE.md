@@ -2,10 +2,13 @@
 
 Line counts for all Python files in the repository, generated with `find . -name "*.py" -not -path "*/__pycache__/*" | sort | xargs wc -l`.
 
+Last verified: 2026-08-07
+
 ## Summary
 
 - **Total lines**: 21041
-- **Dead code removed in this commit**: 13 lines (unused imports and one dead function)
+- **Dead code removed**: 13 lines (unused imports and one dead function)
+- **Other fixes applied**: replaced deprecated `pkg_resources` with `packaging.version` in setup.py
 
 ## Dead Code Removed
 
