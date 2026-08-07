@@ -25,10 +25,10 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          pip install -U setuptools wheel
+          pip install "setuptools<72" wheel
           pip install --no-build-isolation git+https://github.com/fastai/fastcore.git@master
           pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@master
-          pip install -Uqe .
+          pip install --no-build-isolation -Uqe .
       - name: Check nbdev sync
         run: |
           nbdev_export
