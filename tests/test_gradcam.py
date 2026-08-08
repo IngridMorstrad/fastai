@@ -236,3 +236,61 @@ class TestShowGradcam:
         fig = show_gradcam(model, img, class_idx=None)
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
+
+    def test_invalid_method_raises(self):
+        """show_gradcam should raise ValueError for an unrecognized method."""
+        model = _make_simple_cnn(in_channels=3, num_classes=5)
+        img = torch.randn(3, 32, 32)
+        with pytest.raises(ValueError, match="Invalid method"):
+            show_gradcam(model, img, class_idx=0, method='typo')
+
+
+# ============================================================
+# Tests for review-identified issues
+# ============================================================
+
+class TestGradCAMReviewFixes:
+    """Tests verifying fixes for issues identified in code review."""
+
+    def test_batch_greater_than_one_raises(self):
+        """Passing a batch with more than one image should raise ValueError."""
+        model = _make_simple_cnn(in_channels=3, num_classes=5)
+        img = torch.randn(2, 3, 32, 32)
+        with GradCAM(model) as cam:
+            with pytest.raises(ValueError, match="batch size 1"):
+                cam.compute(img, class_idx=0)
+
+    def test_training_state_preserved_when_training(self):
+        """Model should remain in training mode after compute() if it was training."""
+        model = _make_simple_cnn(in_channels=3, num_classes=5)
+        model.train()
+        assert model.training is True
+        with GradCAM(model) as cam:
+            cam.compute(torch.randn(1, 3, 32, 32), class_idx=0)
+        assert model.training is True
+
+    def test_eval_state_preserved_when_eval(self):
+        """Model should remain in eval mode after compute() if it was in eval."""
+        model = _make_simple_cnn(in_channels=3, num_classes=5)
+        model.eval()
+        assert model.training is False
+        with GradCAM(model) as cam:
+            cam.compute(torch.randn(1, 3, 32, 32), class_idx=0)
+        assert model.training is False
+
+    def test_gradcampp_batch_greater_than_one_raises(self):
+        """GradCAMPP should also reject batch > 1."""
+        model = _make_simple_cnn(in_channels=3, num_classes=5)
+        img = torch.randn(3, 3, 32, 32)
+        with GradCAMPP(model) as cam:
+            with pytest.raises(ValueError, match="batch size 1"):
+                cam.compute(img, class_idx=0)
+
+    def test_gradcampp_training_state_preserved(self):
+        """GradCAMPP should also preserve model training state."""
+        model = _make_simple_cnn(in_channels=3, num_classes=5)
+        model.train()
+        assert model.training is True
+        with GradCAMPP(model) as cam:
+            cam.compute(torch.randn(1, 3, 32, 32), class_idx=0)
+        assert model.training is True

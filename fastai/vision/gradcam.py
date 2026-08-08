@@ -55,20 +55,34 @@ class GradCAM:
 
         Returns:
             Heatmap tensor of shape (H_input, W_input) with values in [0, 1].
+
+        Raises:
+            ValueError: If input_tensor has batch size > 1.
         """
         if input_tensor.dim() == 3:
             input_tensor = input_tensor.unsqueeze(0)
 
+        if input_tensor.shape[0] != 1:
+            raise ValueError(
+                f"GradCAM only supports single-image inputs (batch size 1), "
+                f"but got batch size {input_tensor.shape[0]}."
+            )
+
         input_tensor = input_tensor.requires_grad_(True)
+        was_training = self.model.training
         self.model.eval()
-        output = self.model(input_tensor)
+        try:
+            output = self.model(input_tensor)
 
-        if class_idx is None:
-            class_idx = output.argmax(dim=1).item()
+            if class_idx is None:
+                class_idx = output.argmax(dim=1).item()
 
-        self.model.zero_grad()
-        target = output[0, class_idx]
-        target.backward(retain_graph=True)
+            self.model.zero_grad()
+            target = output[0, class_idx]
+            target.backward()
+        finally:
+            if was_training:
+                self.model.train()
 
         # Compute weights via global average pooling of gradients
         weights = self._compute_weights()
@@ -171,6 +185,13 @@ def show_gradcam(model, img_tensor, class_idx=None, layer=None, method='gradcam'
     Returns:
         matplotlib Figure object.
     """
+    # Validate method parameter
+    valid_methods = ('gradcam', 'gradcampp')
+    if method not in valid_methods:
+        raise ValueError(
+            f"Invalid method '{method}'. Must be one of {valid_methods}."
+        )
+
     # Support both raw models and Learner objects
     if hasattr(model, 'model'):
         net = model.model
