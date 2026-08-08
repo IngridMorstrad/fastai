@@ -24,9 +24,9 @@ from fastai.data.transforms import (
     get_files, get_image_files, get_text_files, FileGetter, ImageGetter,
     ItemGetter, AttrGetter,
     RandomSplitter, TrainTestSplitter, IndexSplitter, EndSplitter,
-    GrandparentSplitter, FuncSplitter, MaskSplitter, ColSplitter,
-    RandomSubsetSplitter,
-    parent_label, RegexLabeller,
+    GrandparentSplitter, FuncSplitter, MaskSplitter, FileSplitter,
+    ColSplitter, RandomSubsetSplitter,
+    parent_label, RegexLabeller, ColReader,
     CategoryMap, Categorize, MultiCategorize, OneHotEncode,
     RegressionSetup, IntToFloatTensor, Normalize, broadcast_vec,
 )
@@ -929,3 +929,103 @@ class TestNormalize:
         result = norm.encodes(img)
         # (0.5 - 0.5) / 0.5 = 0
         assert torch.allclose(result, torch.zeros_like(result), atol=1e-5)
+
+
+# ============================================================
+# Tests for FileSplitter
+# ============================================================
+
+class TestFileSplitter:
+    """Tests for the FileSplitter function."""
+
+    def test_basic_split(self, tmp_path):
+        """Test splitting based on a file listing valid items."""
+        valid_file = tmp_path / "valid.txt"
+        valid_file.write_text("b.jpg\nc.jpg\n")
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        items = [data_dir / "a.jpg", data_dir / "b.jpg", data_dir / "c.jpg", data_dir / "d.jpg"]
+        for f in items:
+            f.write_text("")
+        splitter = FileSplitter(valid_file)
+        train, valid = splitter(items)
+        assert sorted(list(valid)) == [1, 2]
+        assert sorted(list(train)) == [0, 3]
+
+    def test_single_valid_item(self, tmp_path):
+        """Test splitting with a single valid item."""
+        valid_file = tmp_path / "valid.txt"
+        valid_file.write_text("a.jpg\n")
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        items = [data_dir / "a.jpg", data_dir / "b.jpg", data_dir / "c.jpg"]
+        for f in items:
+            f.write_text("")
+        splitter = FileSplitter(valid_file)
+        train, valid = splitter(items)
+        assert list(valid) == [0]
+        assert sorted(list(train)) == [1, 2]
+
+    def test_no_valid_items(self, tmp_path):
+        """Test when valid file lists items not in the dataset."""
+        valid_file = tmp_path / "valid.txt"
+        valid_file.write_text("nonexistent.jpg\n")
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        items = [data_dir / "a.jpg", data_dir / "b.jpg"]
+        for f in items:
+            f.write_text("")
+        splitter = FileSplitter(valid_file)
+        train, valid = splitter(items)
+        assert len(valid) == 0
+        assert len(train) == 2
+
+
+# ============================================================
+# Tests for ColReader
+# ============================================================
+
+class TestColReader:
+    """Tests for the ColReader transform."""
+
+    def test_single_column(self):
+        """Test reading a single column."""
+        df = pd.DataFrame({'fname': ['a.jpg', 'b.jpg'], 'label': ['cat', 'dog']})
+        reader = ColReader('fname')
+        result = reader(df.iloc[0])
+        assert result == 'a.jpg'
+
+    def test_with_prefix_suffix(self):
+        """Test reading with prefix and suffix."""
+        df = pd.DataFrame({'fname': ['img1', 'img2']})
+        reader = ColReader('fname', pref='data/', suff='.jpg')
+        result = reader(df.iloc[0])
+        assert result == 'data/img1.jpg'
+
+    def test_label_delim(self):
+        """Test splitting labels by delimiter."""
+        df = pd.DataFrame({'labels': ['cat;dog', 'bird;fish']})
+        reader = ColReader('labels', label_delim=';')
+        result = reader(df.iloc[0])
+        assert result == ['cat', 'dog']
+
+    def test_empty_string_with_delim(self):
+        """Test empty string with label delimiter returns empty list."""
+        df = pd.DataFrame({'labels': ['']})
+        reader = ColReader('labels', label_delim=';')
+        result = reader(df.iloc[0])
+        assert result == []
+
+    def test_multiple_columns(self):
+        """Test reading multiple columns."""
+        df = pd.DataFrame({'col_a': ['x', 'y'], 'col_b': [1, 2]})
+        reader = ColReader(['col_a', 'col_b'])
+        result = reader(df.iloc[0])
+        assert list(result) == ['x', 1]
+
+    def test_integer_column_index(self):
+        """Test reading by integer column index."""
+        df = pd.DataFrame({'fname': ['a.jpg'], 'label': ['cat']})
+        reader = ColReader(0)
+        result = reader(df.iloc[0])
+        assert result == 'a.jpg'
