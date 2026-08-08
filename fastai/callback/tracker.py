@@ -9,7 +9,7 @@ from .progress import *
 
 # %% auto 0
 __all__ = ['TerminateOnNaNCallback', 'TrackerCallback', 'EarlyStoppingCallback', 'MultiMetricEarlyStoppingCallback', 'SaveModelCallback',
-           'ReduceLROnPlateau']
+           'ReduceLROnPlateau', 'CheckpointAveragingCallback']
 
 # %% ../../nbs/17_callback.tracker.ipynb 6
 class TerminateOnNaNCallback(Callback):
@@ -207,3 +207,51 @@ class ReduceLROnPlateau(TrackerCallback):
                 self.wait = 0
                 if self.opt.hypers[-1]["lr"] < old_lr:
                     print(f'Epoch {self.epoch}: reducing lr to {self.opt.hypers[-1]["lr"]}')
+
+# %%
+import copy
+
+class CheckpointAveragingCallback(TrackerCallback):
+    "A `TrackerCallback` that maintains top-K model checkpoints and averages their weights at the end of training."
+    order = TrackerCallback.order+2
+    def __init__(self,
+        monitor='valid_loss', # value (usually loss or metric) being monitored.
+        comp=None, # numpy comparison operator; np.less if monitor is loss, np.greater if monitor is metric.
+        min_delta=0., # minimum delta between the last monitor value and the best monitor value.
+        k=5, # number of top checkpoints to keep for averaging.
+        save_averaged=False, # if True, save the averaged model to disk at end of training.
+        fname='averaged_model', # filename used when saving the averaged model.
+        reset_on_fit=True # before model fitting, reset value being monitored to -infinity (if monitor is metric) or +infinity (if monitor is loss).
+    ):
+        super().__init__(monitor=monitor, comp=comp, min_delta=min_delta, reset_on_fit=reset_on_fit)
+        self.k,self.save_averaged,self.fname = k,save_averaged,fname
+
+    def before_fit(self):
+        "Initialize the top-K checkpoint list."
+        super().before_fit()
+        self.top_k = []
+
+    def after_epoch(self):
+        "Store a copy of the model state_dict if it is among the top-K."
+        super().after_epoch()
+        val = self.recorder.values[-1][self.idx]
+        state = copy.deepcopy(self.model.state_dict())
+        if len(self.top_k) < self.k:
+            self.top_k.append((val, state))
+            self.top_k.sort(key=lambda x: x[0], reverse=(self.comp == np.greater))
+        elif self.comp(val, self.top_k[-1][0]):
+            self.top_k[-1] = (val, state)
+            self.top_k.sort(key=lambda x: x[0], reverse=(self.comp == np.greater))
+
+    def after_fit(self):
+        "Average the stored state_dicts and load into the model."
+        if len(self.top_k) > 0:
+            avg_state = {}
+            keys = self.top_k[0][1].keys()
+            for key in keys:
+                tensors = [sd[key] for _, sd in self.top_k]
+                avg_state[key] = sum(tensors) / len(tensors)
+            self.model.load_state_dict(avg_state)
+            if self.save_averaged:
+                self.learn.save(self.fname)
+        super().after_fit()
