@@ -11,6 +11,7 @@ For discussions about features before implementation, please use the [fastai for
 ## Training
 
 - Support learning rate finder (`lr_find`) with multiple losses displayed on the same plot for multi-task models
+- Support automatic mixed-precision gradient scaling configuration per parameter group to allow selective full-precision training of sensitive layers (e.g. batch norm)
 
 ## Vision
 
