@@ -8,6 +8,7 @@ For discussions about features before implementation, please use the [fastai for
 
 - Add built-in support for streaming/iterable datasets that do not fit in memory (e.g. webdataset or HuggingFace IterableDataset integration)
 - Add support for automatic dataset versioning and lineage tracking so users can reproduce experiments by referencing a specific data snapshot
+- Add a `DataLoaders.show_augmentations(n=5)` method that displays a grid of the same input item after repeated augmentation transforms to help users visually verify and debug their augmentation pipeline
 
 ## Training
 
