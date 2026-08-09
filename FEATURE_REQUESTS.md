@@ -39,3 +39,4 @@ For discussions about features before implementation, please use the [fastai for
 ## Documentation & Tooling
 
 - Add a CLI command (`fastai_check_env`) that validates GPU drivers, CUDA version, and dependency compatibility in one step
+- Provide a `Learner.export_logs()` method that writes training metrics to structured JSON/CSV files compatible with TensorBoard, Weights & Biases, and other visualization tools
