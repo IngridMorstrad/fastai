@@ -373,6 +373,69 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         """CheckpointAveragingCallback should be in __all__."""
         self.assertIn('CheckpointAveragingCallback', tracker_module.__all__)
 
+    def test_run_guard_prevents_deep_copies(self):
+        """When self.run is False (e.g. during lr_find), after_epoch should not store checkpoints."""
+        cb = self._create_callback(k=3, monitor='valid_loss')
+        cb = self._setup_callback(cb, model_state={'w': np.array([1.0])})
+        cb.before_fit()
+
+        # Simulate lr_find by setting self.run = False
+        cb.run = False
+
+        # Simulate epochs
+        cb.model._state_dict = {'w': np.array([99.0])}
+        cb.recorder.values.append([0.1])
+        cb.after_epoch()
+
+        # top_k should remain empty since run is False
+        self.assertEqual(len(cb.top_k), 0)
+
+    def test_integer_buffer_not_averaged(self):
+        """Integer-typed buffers should be copied from best checkpoint, not averaged."""
+        cb = self._create_callback(k=2, monitor='valid_loss')
+        initial_state = {
+            'weight': np.array([1.0, 2.0]),
+            'num_batches_tracked': np.array([100], dtype=np.int64)
+        }
+        cb = self._setup_callback(cb, model_state=initial_state)
+        cb.before_fit()
+
+        # Epoch 1 - best (lowest loss)
+        cb.model._state_dict = {
+            'weight': np.array([2.0, 4.0]),
+            'num_batches_tracked': np.array([200], dtype=np.int64)
+        }
+        cb.recorder.values.append([0.2])
+        cb.after_epoch()
+
+        # Epoch 2 - second best
+        cb.model._state_dict = {
+            'weight': np.array([4.0, 6.0]),
+            'num_batches_tracked': np.array([300], dtype=np.int64)
+        }
+        cb.recorder.values.append([0.3])
+        cb.after_epoch()
+
+        cb.after_fit()
+
+        # Float weight should be averaged: (2+4)/2 = 3, (4+6)/2 = 5
+        np.testing.assert_array_almost_equal(cb.model._state_dict['weight'], np.array([3.0, 5.0]))
+        # Integer buffer should be from best checkpoint (loss=0.2), NOT averaged
+        np.testing.assert_array_equal(cb.model._state_dict['num_batches_tracked'], np.array([200]))
+
+    def test_memory_warning_printed(self):
+        """before_fit should print a memory usage warning."""
+        import io
+        import contextlib
+        cb = self._create_callback(k=7)
+        cb = self._setup_callback(cb)
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            cb.before_fit()
+        output = f.getvalue()
+        self.assertIn('7', output)
+        self.assertIn('checkpoint', output.lower())
+
 
 if __name__ == '__main__':
     unittest.main()

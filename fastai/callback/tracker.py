@@ -4,6 +4,7 @@
 
 # %% ../../nbs/17_callback.tracker.ipynb 2
 from __future__ import annotations
+import copy
 from ..basics import *
 from .progress import *
 
@@ -209,10 +210,13 @@ class ReduceLROnPlateau(TrackerCallback):
                     print(f'Epoch {self.epoch}: reducing lr to {self.opt.hypers[-1]["lr"]}')
 
 # %%
-import copy
-
 class CheckpointAveragingCallback(TrackerCallback):
-    "A `TrackerCallback` that maintains top-K model checkpoints and averages their weights at the end of training."
+    """A `TrackerCallback` that maintains top-K model checkpoints and averages their weights at the end of training.
+
+    Note: Each stored checkpoint is a full deep-copy of the model state_dict. For large models,
+    this can consume significant memory (e.g., ~100 MB per slot for ResNet-50, ~1.2 GB for ViT-Large).
+    Choose `k` accordingly based on available memory.
+    """
     order = TrackerCallback.order+2
     def __init__(self,
         monitor='valid_loss', # value (usually loss or metric) being monitored.
@@ -230,9 +234,12 @@ class CheckpointAveragingCallback(TrackerCallback):
         "Initialize the top-K checkpoint list."
         super().before_fit()
         self.top_k = []
+        if self.run:
+            print(f'CheckpointAveragingCallback: will keep up to {self.k} checkpoint copies in memory.')
 
     def after_epoch(self):
         "Store a copy of the model state_dict if it is among the top-K."
+        if not self.run: return
         super().after_epoch()
         val = self.recorder.values[-1][self.idx]
         state = copy.deepcopy(self.model.state_dict())
@@ -243,14 +250,29 @@ class CheckpointAveragingCallback(TrackerCallback):
             self.top_k[-1] = (val, state)
             self.top_k.sort(key=lambda x: x[0], reverse=(self.comp == np.greater))
 
+    def _is_floating_point(self, tensor):
+        "Check if a tensor is floating-point (works for both PyTorch tensors and numpy arrays)."
+        if hasattr(tensor, 'is_floating_point'):
+            return tensor.is_floating_point()
+        # For numpy arrays, check dtype kind
+        if hasattr(tensor, 'dtype'):
+            return tensor.dtype.kind == 'f'
+        return True  # default to treating as float
+
     def after_fit(self):
         "Average the stored state_dicts and load into the model."
         if len(self.top_k) > 0:
             avg_state = {}
             keys = self.top_k[0][1].keys()
+            # Use the best checkpoint (first in sorted list) for non-float buffers
+            best_state = self.top_k[0][1]
             for key in keys:
                 tensors = [sd[key] for _, sd in self.top_k]
-                avg_state[key] = sum(tensors) / len(tensors)
+                if self._is_floating_point(tensors[0]):
+                    avg_state[key] = sum(tensors) / len(tensors)
+                else:
+                    # For integer buffers (e.g. num_batches_tracked), use the best checkpoint's value
+                    avg_state[key] = copy.deepcopy(best_state[key])
             self.model.load_state_dict(avg_state)
             if self.save_averaged:
                 self.learn.save(self.fname)
