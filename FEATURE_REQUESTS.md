@@ -36,6 +36,7 @@ For discussions about features before implementation, please use the [fastai for
 ## Deployment & Export
 
 - Provide a `Learner.to_api()` convenience method that generates a minimal FastAPI/Flask prediction endpoint from a trained model
+- Add a `Learner.benchmark()` method that profiles inference latency, throughput, and memory usage across configurable batch sizes to help users choose optimal deployment settings
 
 ## Documentation & Tooling
 
