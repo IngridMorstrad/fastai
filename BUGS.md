@@ -10,6 +10,11 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `TfmdDL` padding uses `L.items.index` instead of `L.index` due to an unresolved upstream bug in `L` (`fastai/text/data.py`)
 - `CorpusBLEU.value` compares `self.counts` (a list) against integer `0`, so the empty-counts guard is never triggered, risking ZeroDivisionError (`fastai/metrics.py`)
 - `make_vocab` uses `f'xxfake'` without interpolating the loop variable, producing duplicate padding tokens instead of unique ones (`fastai/text/data.py`)
+- `adam_step._defaults`, `radam_step._defaults`, and `qhadam_step._defaults` use the attribute name `_defaults` but `Optimizer.__init__` reads `self.cbs.attrgot('defaults')`, so the `eps` values from these step functions are never merged into optimizer hyperparameter defaults (`fastai/optimizer.py`)
+- `fit_flat_cos` accepts a `start_epoch` parameter but always passes the hardcoded value `start_epoch=0` to `self.fit()`, ignoring the caller-supplied argument (`fastai/callback/schedule.py`)
+- `CorpusBLEUMetric.reset` does not reset `self.samp_idx`, so stale sample index state persists across validation runs when the metric instance is reused (`fastai/metrics.py`)
+- `Pad_Chunk.__init__` calls `store_attr('pad_idx, pad_first, seq_len,seq_len')` listing `seq_len` twice, which is redundant and may mask a missing attribute that was intended to be stored (`fastai/text/data.py`)
+- `CutMix.before_batch` mutates `self.learn.xb[0]` in-place via slice assignment, but `xb` is a tuple, so if the batch is ever reconstructed or the tensor is not shared this modification silently has no effect (`fastai/callback/mixup.py`)
 
 ## Fixed
 
