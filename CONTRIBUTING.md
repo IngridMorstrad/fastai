@@ -97,3 +97,21 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Quick Reference Commands
+
+Common commands you will use during development, organized by workflow stage:
+
+| Command | Purpose |
+|---------|---------|
+| `nbdev_install_hooks` | Set up git hooks after cloning (run once) |
+| `nbdev_export` | Export notebook cells tagged `#\|export` to library `.py` files |
+| `nbdev_update` | Sync library changes back into notebooks |
+| `nbdev_test` | Run all notebook tests in parallel |
+| `nbdev_test --do_print` | Run tests with verbose output showing which notebooks execute |
+| `nbdev_test --fname nbs/00_torch_core.ipynb` | Run tests for a single notebook |
+| `nbdev_clean` | Strip metadata from notebooks to reduce diff noise |
+| `nbdev_prepare` | Run export, test, and clean in one step before committing |
+| `pip install -e '.[dev]'` | Install fastai in editable mode with dev dependencies |
+| `git diff --stat master` | See which files your branch has changed relative to master |
+
