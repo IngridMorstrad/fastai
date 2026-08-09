@@ -11,6 +11,7 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 
 ## Fixed
 
+- `CorpusBLEUMetric.value` compared `self.counts` (a list) against integer 0 which always evaluates False, disabling the zero-counts guard (`fastai/metrics.py`) - fixed by using `max(self.counts) == 0`
 - `LMDataLoader` does not support backward language model training (`fastai/text/data.py`) - added `backwards` parameter to `LMDataLoader.__init__` that reverses text sequences when enabled
 
 ## Reporting a Bug
