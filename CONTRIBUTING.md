@@ -83,6 +83,56 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Troubleshooting CI Failures
+
+This repository uses a single CI job (`test-nbdev-sync`) that verifies notebooks and the library stay in sync. Understanding how it works will save you time when a check fails.
+
+### What CI does
+
+1. Installs `fastcore` and `nbdev` from their latest `master`/`main` branches.
+2. Runs `python -m nbdev.export` to regenerate library files from notebooks.
+3. Checks `git status --porcelain -uno` for any changes. If the working tree is dirty after export, CI fails with the message **"Notebooks and library are not in sync. Please run nbdev_export."**
+
+### When CI is skipped
+
+CI does **not** run for changes that only touch these paths:
+
+- `.github/**` (except `.github/workflows/main.yml` itself)
+- `docs/**`
+- `*.md` (any markdown file at the repo root)
+- `.git*` (e.g., `.gitignore`, `.gitattributes`)
+
+So pure documentation or markdown PRs will not trigger the sync check.
+
+### Common failure scenarios and fixes
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| "Notebooks and library are not in sync" | You edited a `.py` file in `fastai/` without updating the source notebook | Run `nbdev_update` to propagate your changes back to notebooks, then commit the updated notebooks |
+| "Notebooks and library are not in sync" | You edited a notebook cell tagged `#\|export` without re-exporting | Run `nbdev_export` locally, then commit the regenerated `.py` files |
+| Import or install error during CI setup | Upstream `fastcore` or `nbdev` introduced a breaking change | Check the [fastcore](https://github.com/fastai/fastcore) and [nbdev](https://github.com/fastai/nbdev) repos for recent commits; report on the forum if confirmed |
+
+### Reproducing CI locally
+
+```bash
+# From the repo root
+pip install "setuptools<72" wheel
+pip install --no-build-isolation git+https://github.com/fastai/fastcore.git@master
+pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@main
+pip install --no-deps -e .
+
+python -m nbdev.export
+git status --porcelain -uno
+# If the above shows changes, notebooks and library are out of sync
+```
+
+### Tips
+
+- Always run `nbdev_export` before committing if you changed notebook cells.
+- Always run `nbdev_update` before committing if you changed `.py` files directly.
+- Use `nbdev_test` to run notebook tests locally before pushing.
+- If you only changed markdown files or docs, CI should not trigger at all. If it does, check whether your PR also modifies `.github/workflows/main.yml`.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
