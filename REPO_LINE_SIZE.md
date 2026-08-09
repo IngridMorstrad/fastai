@@ -2,11 +2,11 @@
 
 Line counts for all Python files in the repository, generated with `find . -name "*.py" -not -path "*/__pycache__/*" | sort | xargs wc -l`.
 
-Last verified: 2026-08-09
+Last verified: 2026-08-09 (updated after `_modidx.py` regeneration)
 
 ## Summary
 
-- **Total lines**: 25757
+- **Total lines**: 25777
 - **Dead code removed (round 1)**: 13 lines (unused imports and one dead function)
 - **Dead code removed (round 2)**: ~122 lines (dead functions, duplicate method, compatibility shim, unused import)
 - **Other fixes applied**: replaced deprecated `pkg_resources` with `packaging.version` in setup.py
@@ -78,7 +78,7 @@ Last verified: 2026-08-09
     412 ./fastai/medical/imaging.py
       0 ./fastai/medical/__init__.py
     473 ./fastai/metrics.py
-   2682 ./fastai/_modidx.py
+   2702 ./fastai/_modidx.py
     497 ./fastai/optimizer.py
      46 ./fastai/_pytorch_doc.py
       6 ./fastai/tabular/all.py
@@ -147,5 +147,5 @@ Last verified: 2026-08-09
     773 ./tests/test_optimizer.py
     575 ./tests/test_text_core.py
     528 ./tests/test_torch_core.py
-  25757 total
+  25777 total
 ```
