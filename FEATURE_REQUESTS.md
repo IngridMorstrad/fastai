@@ -7,6 +7,7 @@ For discussions about features before implementation, please use the [fastai for
 ## Data
 
 - Add built-in support for streaming/iterable datasets that do not fit in memory (e.g. webdataset or HuggingFace IterableDataset integration)
+- Add support for automatic dataset versioning and lineage tracking so users can reproduce experiments by referencing a specific data snapshot
 
 ## Training
 
