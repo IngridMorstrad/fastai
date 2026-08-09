@@ -436,7 +436,7 @@ class CorpusBLEUMetric(Metric):
 
     @property
     def value(self):
-        if self.counts == 0: return None
+        if max(self.counts) == 0: return None
         elif max(self.corrects) == 0: return 0.0
         else:
             precs = [c/t for c,t in zip(self.corrects,self.counts)]

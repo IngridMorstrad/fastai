@@ -1138,11 +1138,11 @@ class TestCorpusBLEUMetric:
         assert bleu.corrects == [0, 0, 0, 0]
         assert bleu.counts == [0, 0, 0, 0]
 
-    def test_empty_returns_zero(self):
+    def test_empty_returns_none(self):
         bleu = CorpusBLEUMetric(vocab_sz=100, axis=-1)
         bleu.reset()
-        # With no accumulation, max(corrects)==0 so value is 0.0
-        assert bleu.value == 0.0
+        # With no accumulation, counts are all zero so value is None
+        assert bleu.value is None
 
     def test_ngram_equality(self):
         bleu = CorpusBLEUMetric(vocab_sz=100, axis=-1)
