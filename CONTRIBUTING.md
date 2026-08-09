@@ -97,3 +97,40 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Architecture Overview
+
+Understanding the high-level structure of fastai helps you find the right place to make changes. The project follows a layered architecture built on top of [nbdev](https://nbdev.fast.ai/), where notebooks in `/nbs` are the source of truth and Python files in `/fastai` are auto-generated.
+
+### Core layers (bottom to top)
+
+| Layer | Location | Purpose |
+|-------|----------|---------|
+| **Foundation** | `fastai/imports.py`, `fastai/torch_imports.py` | Re-exports and monkey-patches from fastcore, torch, etc. |
+| **Data** | `fastai/data/` | `DataLoaders`, `Datasets`, transforms, and the `DataBlock` API |
+| **Optimizer** | `fastai/optimizer.py` | `Optimizer` class with composable step functions (`adam_step`, `sgd_step`, etc.) |
+| **Learner** | `fastai/learner.py` | Central training loop, event system, and the `Learner` class |
+| **Callbacks** | `fastai/callback/` | All training customization: schedulers, mixed precision, logging, tracking |
+| **Applications** | `fastai/vision/`, `fastai/text/`, `fastai/tabular/`, `fastai/collab.py` | Domain-specific data pipelines, models, and learners |
+
+### Key design patterns
+
+- **Event-driven training loop**: `Learner.fit()` emits events (`before_fit`, `before_epoch`, `before_batch`, etc.) and `Callback` subclasses respond. Almost all training behavior is implemented as callbacks, including the core training step itself (`TrainEvalCallback`).
+- **Type dispatch**: fastai uses `@typedispatch` (from fastcore) extensively. If you see a function that seems incomplete, look for overloads registered elsewhere with the same name but different type annotations.
+- **Transform pipelines**: `Pipeline` and `TfmdLists` compose transforms that have both `encodes` and `decodes` methods, enabling reversible data processing (e.g. showing decoded predictions).
+- **L (list)**: fastai uses `L` (from fastcore) as its primary list type. It supports indexing with lists/masks and attribute access via `.attrgot()`.
+
+### Where to make changes
+
+| If you want to... | Look at... |
+|-------------------|-----------|
+| Fix a data loading bug | `nbs/` notebooks tagged `#|export` that generate `fastai/data/*.py` |
+| Add a new callback | `nbs/` notebook for callbacks, then export to `fastai/callback/` |
+| Change the training loop | `fastai/learner.py` (but prefer callbacks over modifying the loop directly) |
+| Add a new metric | `fastai/metrics.py` - subclass `Metric` or `AccumMetric` |
+| Fix a domain-specific issue | The relevant `fastai/vision/`, `fastai/text/`, or `fastai/tabular/` module |
+| Add or fix tests | `tests/` directory - see existing test files for patterns |
+
+### Important: notebooks are the source of truth
+
+The Python files under `fastai/` are **generated** from notebooks in `/nbs`. If you need to change library code, edit the notebook cell tagged `#|export` and run `nbdev_export`. If you edit the `.py` files directly (for quick iteration), run `nbdev_update` to sync changes back to notebooks before submitting your PR.
