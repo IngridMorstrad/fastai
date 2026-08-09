@@ -10,6 +10,7 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `TfmdDL` padding uses `L.items.index` instead of `L.index` due to an unresolved upstream bug in `L` (`fastai/text/data.py`)
 - `CorpusBLEU.value` compares `self.counts` (a list) against integer `0`, so the empty-counts guard is never triggered, risking ZeroDivisionError (`fastai/metrics.py`)
 - `make_vocab` uses `f'xxfake'` without interpolating the loop variable, producing duplicate padding tokens instead of unique ones (`fastai/text/data.py`)
+- `_BaseOptimizer.param_groups` setter rebinds loop variable `pg` instead of mutating `self.param_lists`, so assigning new parameter groups silently fails to update them (`fastai/optimizer.py`)
 
 ## Fixed
 
