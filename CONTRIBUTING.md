@@ -82,3 +82,18 @@ If you'd like to learn the nbdev commands available and more about the project, 
 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
+
+## PR Checklist
+
+Before marking your pull request as ready for review, verify the following:
+
+- [ ] **Branch is up to date** with `master` (rebase or merge latest changes)
+- [ ] **`nbdev_export`** has been run if you changed any notebook cells tagged with `#|export`
+- [ ] **`nbdev_update`** has been run if you changed library `.py` files directly
+- [ ] **`nbdev_test`** passes locally (use `--do_print` to see which notebooks run)
+- [ ] **No generated file edits** - never hand-edit files in `fastai/` that are auto-generated from notebooks; edit the notebook instead
+- [ ] **Coding style** follows the [fastai style guide](https://docs.fast.ai/dev/style.html) and [abbreviation conventions](https://docs.fast.ai/dev/abbr.html)
+- [ ] **Tests included** - add at least one test that fails without your change and passes with it
+- [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
+- [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
+- [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work

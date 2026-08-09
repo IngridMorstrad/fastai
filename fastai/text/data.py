@@ -24,7 +24,7 @@ def make_vocab(count, min_freq=3, max_vocab=60000, special_toks=None):
         if o in vocab: vocab.remove(o)
         vocab.insert(0, o)
     vocab = vocab[:max_vocab]
-    return vocab + [f'xxfake' for i in range(0, 8-len(vocab)%8)]
+    return vocab + [f'xxfake{i}' for i in range(0, 8-len(vocab)%8)]
 
 # %% ../../nbs/31_text.data.ipynb 13
 class TensorText(TensorBase):   pass
