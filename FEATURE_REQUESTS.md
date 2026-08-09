@@ -30,6 +30,7 @@ For discussions about features before implementation, please use the [fastai for
 ## Callbacks
 
 - [DONE] Add a built-in EarlyStopping callback that supports monitoring multiple metrics with configurable logic (any/all) -- implemented as `MultiMetricEarlyStoppingCallback`
+- Add a built-in GPU memory profiling callback that logs peak GPU memory usage per training step to help users diagnose OOM issues
 
 ## Deployment & Export
 
