@@ -21,6 +21,55 @@ Here are some ways that you can learn a lot about the library, whilst also contr
 - Document something that is currently undocumented. You can find them by looking for the “new methods” section in any doc notebook. Here’s a [search](https://github.com/fastai/fastai/search?q=%22new+methods%22&unscoped_q=%22new+methods%22) that lists them
 - Add an example of use to the docs for something that doesn’t currently have an example of use. We’d like everything soon in the docs to include an actual piece of working code demonstrating it. Currently, we’ve largely only provided working examples for stuff higher up the abstraction ladder.
 
+## Testing Guide
+
+Running tests is an essential part of contributing to fastai. Here is how to run and write tests for the project:
+
+### Running tests
+
+```bash
+# Run the full test suite
+pytest tests/
+
+# Run a specific test file
+pytest tests/test_core.py
+
+# Run a specific test function
+pytest tests/test_core.py::test_function_name
+
+# Run tests with verbose output
+pytest tests/ -v
+
+# Run tests in parallel (requires pytest-xdist)
+pytest tests/ -n auto
+```
+
+### Running notebook tests with nbdev
+
+Since fastai uses nbdev, you can also validate notebooks directly:
+
+```bash
+# Test all notebooks
+nbdev_test
+
+# Test with printed output to see which notebooks run
+nbdev_test --do_print
+```
+
+### Writing tests
+
+- Place test files in the `tests/` directory, named `test_<module>.py`
+- Each test function should start with `test_`
+- Test one behavior per function; keep tests small and focused
+- Include both a positive case (expected behavior) and an edge case when possible
+- If your PR fixes a bug, add a test that fails without the fix and passes with it
+
+### Tips
+
+- Use `pytest --tb=short` to get concise tracebacks when debugging failures
+- If a test requires a GPU, mark it with `@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")`
+- For tests that download data, use the smallest dataset possible to keep the suite fast
+
 ## Did you find a bug?
 
 * Nobody is perfect, especially not us. But first, please double-check the bug doesn't come from something on your side. The [forum](http://forums.fast.ai/) is a tremendous source for help, and we'd advise to use it as a first step. Be sure to include as much code as you can so that other people can easily help you.
