@@ -8,8 +8,6 @@ import os
 import pytest
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 

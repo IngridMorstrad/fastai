@@ -7,8 +7,6 @@ device placement, and edge cases.
 import sys
 import os
 import pytest
-import random
-
 # Ensure the repo root is on sys.path so sub-package imports resolve correctly.
 _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if _repo_root not in sys.path:
@@ -19,12 +17,6 @@ if _repo_root not in sys.path:
 # we patch them into the relevant module namespaces so DataLoader iteration works.
 import fasttransform
 import fastcore.basics
-
-# Patch retain_types and cast into the fastcore.dispatch module namespace
-# since fastai imports them via `from fastcore.dispatch import *`
-class _FakeDispatch:
-    """Shim module providing retain_types and cast that fastai expects."""
-    pass
 
 # If fastcore.dispatch doesn't properly export these, patch them in
 try:
