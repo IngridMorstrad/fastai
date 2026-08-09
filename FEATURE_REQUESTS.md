@@ -17,7 +17,6 @@ For discussions about features before implementation, please use the [fastai for
 
 ## Vision
 
-- Add native support for ONNX model export with dynamic batch-size axes directly from `Learner`
 - [DONE] Add built-in GradCAM/Grad-CAM++ visualization support to highlight class-discriminative regions in image predictions -- implemented in `fastai.vision.gradcam`
 
 ## Text
@@ -35,6 +34,7 @@ For discussions about features before implementation, please use the [fastai for
 
 ## Deployment & Export
 
+- Add native support for ONNX model export with dynamic batch-size axes directly from `Learner`
 - Provide a `Learner.to_api()` convenience method that generates a minimal FastAPI/Flask prediction endpoint from a trained model
 - Add a `Learner.benchmark()` method that profiles inference latency, throughput, and memory usage across configurable batch sizes to help users choose optimal deployment settings
 

@@ -97,3 +97,49 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Local Development Setup
+
+Follow these steps to set up a local development environment for fastai:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/fastai/fastai.git
+cd fastai
+
+# 2. Create and activate a conda environment (recommended)
+conda create -n fastai-dev python=3.9 -y
+conda activate fastai-dev
+
+# 3. Install PyTorch (adjust for your CUDA version; see https://pytorch.org)
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia -y
+
+# 4. Install fastai in editable mode with development dependencies
+pip install -e ".[dev]"
+
+# 5. Install nbdev (required for notebook-driven development)
+pip install nbdev
+
+# 6. Set up git hooks for notebook cleaning
+nbdev_install_hooks
+
+# 7. Run the test suite to verify your setup
+nbdev_test --do_print
+```
+
+### Common Commands
+
+| Task | Command |
+|------|---------|
+| Run all tests | `nbdev_test` |
+| Run a specific test file | `python -m pytest tests/test_vision.py -x` |
+| Export notebooks to library | `nbdev_export` |
+| Sync library changes back to notebooks | `nbdev_update` |
+| Build documentation locally | `nbdev_docs` |
+| Check for notebook/library sync issues | `nbdev_clean` |
+
+### Troubleshooting
+
+- **CUDA mismatch errors**: Ensure your PyTorch installation matches your system CUDA version. Run `python -c "import torch; print(torch.cuda.is_available())"` to verify GPU access.
+- **nbdev not found**: Make sure you installed with `pip install nbdev` and your conda/venv environment is activated.
+- **Import errors after editing**: Run `nbdev_export` if you edited notebooks, or `nbdev_update` if you edited `.py` files directly, to keep them in sync.
