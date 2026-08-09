@@ -78,6 +78,27 @@ If you'd like to learn the nbdev commands available and more about the project, 
 
 * Please ask it on the [fastai forum](http://forums.fast.ai/) (after searching someone didn't ask the same one before with a quick search). We'd rather have the maximum of discussions there so that the largest number can benefit from it.
 
+## Quick Start for First-Time Contributors
+
+If this is your first time contributing to fastai, follow this checklist to get up and running:
+
+1. **Fork and clone** the repository, then run `nbdev_install_hooks` in the project root.
+2. **Create a new branch** for your change: `git checkout -b your-feature-name`.
+3. **Read the coding style guide** at https://docs.fast.ai/dev/style.html before writing any code.
+4. **Make your change** in the relevant notebook under `/nbs` (for library code) or directly in markdown files (for docs-only changes).
+5. **Run `nbdev_export`** if you edited an exported cell, to sync the library with your notebook changes.
+6. **Run tests** with `nbdev_test` to verify nothing is broken.
+7. **Commit with a descriptive message** using a type prefix (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`).
+8. **Push your branch** and open a pull request against `master`.
+9. **Respond to review feedback** with additional commits in the same PR (do not force-push unless asked).
+
+### Tips for a smooth first PR
+
+- Start small: fixing a typo, adding a test, or documenting an undocumented method are all great first contributions.
+- Keep PRs focused on a single change; avoid bundling unrelated fixes.
+- Check existing Issues and PRs before starting work to avoid duplication.
+- If you are unsure about an approach, open a discussion on the [fastai forum](https://forums.fast.ai/) first.
+
 ## Do you want to contribute to the documentation?
 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
