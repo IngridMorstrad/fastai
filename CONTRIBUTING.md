@@ -97,3 +97,70 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Dead Code Detection Guide
+
+This section explains how to safely identify and remove dead code in fastai's nbdev-based codebase.
+
+### Understanding re-export modules vs. regular modules
+
+fastai uses certain modules purely for re-exporting symbols to other parts of the library:
+
+- `fastai/imports.py` - re-exports standard library and third-party utilities
+- `fastai/torch_imports.py` - re-exports PyTorch symbols
+
+Other modules import from these via `from .imports import *` or `from .torch_imports import *`. **Never remove an import from a re-export module** unless you have confirmed that no other module in the library consumes it through a star import. A grep across the entire codebase is insufficient because star imports make usage invisible at the symbol level.
+
+### Identifying unused imports in regular (non-re-export) modules
+
+For modules that are NOT re-export modules (e.g., `fastai/callback/captum.py`, `fastai/medical/imaging.py`):
+
+1. Check if the import is used anywhere in the same file:
+   ```bash
+   grep -n 'symbol_name' fastai/module_file.py
+   ```
+2. Confirm the symbol is not listed in the module's `__all__` (if one exists).
+3. Confirm the module is not star-imported by another module:
+   ```bash
+   grep -rn 'from.*module_name.*import \*' fastai/
+   ```
+
+If the import appears only on its import line and is not part of a public API or re-export chain, it is safe to remove.
+
+### Finding dead internal functions
+
+Internal functions (those not in `__all__` and prefixed with `_`) may become dead code over time. To detect them:
+
+1. **Grep-based approach** - Find definitions and search for call sites:
+   ```bash
+   # Find all internal function definitions
+   grep -rn 'def _[a-z]' fastai/module.py
+
+   # For each, search for usages across the entire codebase
+   grep -rn '_function_name' fastai/ nbs/ tests/
+   ```
+   If a function only appears at its definition site, it is likely dead.
+
+2. **AST-based approach** - Use Python's `ast` module to parse a file, collect all function definitions, then check which names appear in `ast.Call` or `ast.Name` nodes elsewhere in the tree. This avoids false positives from comments or strings.
+
+3. **Caution with callbacks and dynamically dispatched methods** - fastai uses `__dunder__` methods and callback hooks (e.g., `after_batch`, `before_fit`) that are called by the training loop via string dispatch. These will not appear as direct call sites but are NOT dead code.
+
+### The critical nbdev workflow
+
+**Never edit `.py` files directly.** The `.py` files in `fastai/` are auto-generated from notebooks in `nbs/`.
+
+The correct workflow for removing dead code:
+
+1. Identify the dead code in the `.py` file.
+2. Find the corresponding notebook (e.g., `fastai/torch_core.py` comes from `nbs/00_torch_core.ipynb`).
+3. Edit the notebook to remove the dead code from the `#|export` cell.
+4. Run `python -m nbdev.export` (or `nbdev_export`) to regenerate the `.py` files.
+5. Verify with `git status` that only the expected files changed.
+
+### What NOT to remove
+
+- **Public API symbols** - anything listed in a module's `__all__` may be depended on by downstream users, even if unused within the library itself.
+- **Re-export module imports** - symbols in `imports.py` or `torch_imports.py` are consumed via star imports and cannot be safely audited with grep alone.
+- **Callback hook methods** - methods like `before_fit`, `after_batch`, `after_epoch`, etc., are invoked dynamically by the training loop.
+- **Dunder methods** - `__reduce_ex__`, `__repr__`, `__getattr__`, etc., are called by Python internals or frameworks.
+- **Compatibility shims for supported versions** - only remove version shims when the minimum required version (check `settings.ini`) already includes the feature.
