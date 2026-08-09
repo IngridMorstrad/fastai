@@ -8,17 +8,20 @@ For discussions about features before implementation, please use the [fastai for
 
 - Add built-in support for streaming/iterable datasets that do not fit in memory (e.g. webdataset or HuggingFace IterableDataset integration)
 - Add support for automatic dataset versioning and lineage tracking so users can reproduce experiments by referencing a specific data snapshot
+- Add a `DataLoaders.profile()` method that reports per-batch loading time, transform bottlenecks, and CPU/GPU transfer overhead to help diagnose slow training pipelines
 
 ## Training
 
 - Support learning rate finder (`lr_find`) with multiple losses displayed on the same plot for multi-task models
 - Support automatic mixed-precision gradient scaling configuration per parameter group to allow selective full-precision training of sensitive layers (e.g. batch norm)
 - [DONE] Add a checkpoint averaging callback that maintains the top-K model checkpoints by validation loss and produces a weight-averaged model at the end of training for improved generalization -- implemented as `CheckpointAveragingCallback`
+- Add a `Learner.distill()` method that implements knowledge distillation from a teacher model with configurable temperature and loss weighting for model compression workflows
 
 ## Vision
 
 - Add native support for ONNX model export with dynamic batch-size axes directly from `Learner`
 - [DONE] Add built-in GradCAM/Grad-CAM++ visualization support to highlight class-discriminative regions in image predictions -- implemented in `fastai.vision.gradcam`
+- Add support for test-time augmentation (TTA) with configurable augmentation pipelines and ensembling strategies (mean, voting, weighted) beyond the current default horizontal flip
 
 ## Text
 
@@ -27,6 +30,7 @@ For discussions about features before implementation, please use the [fastai for
 ## Tabular
 
 - Allow incremental/online learning for tabular models so new data can be incorporated without full retraining
+- Add built-in SHAP/permutation-based feature importance visualization that integrates with `TabularLearner.show_results()` to explain individual predictions
 
 ## Callbacks
 
@@ -42,3 +46,4 @@ For discussions about features before implementation, please use the [fastai for
 
 - Add a CLI command (`fastai_check_env`) that validates GPU drivers, CUDA version, and dependency compatibility in one step
 - Provide a `Learner.export_logs()` method that writes training metrics to structured JSON/CSV files compatible with TensorBoard, Weights & Biases, and other visualization tools
+- Add a `nbdev_diff` CLI command that shows a human-readable diff between notebook cells and their corresponding exported library code to quickly spot sync issues

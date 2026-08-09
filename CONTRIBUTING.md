@@ -83,6 +83,31 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Debugging Tips
+
+If you run into problems while developing or testing, these tips can save you time:
+
+**Notebook/library sync issues:**
+- Run `nbdev_export` followed by `nbdev_update` and check `git diff` to see if anything changed. If the diff is non-empty after a round-trip, you may have edited a generated file directly instead of the source notebook.
+- Use `nbdev_test --do_print --fname <notebook.ipynb>` to run a single notebook in isolation and see exactly where it fails.
+
+**Import errors after changes:**
+- If you get `ImportError` or `AttributeError` after modifying a notebook, make sure the cell has the correct `#|export` directive and that you re-ran `nbdev_export`.
+- Restart your Python kernel or use `importlib.reload()` to clear stale cached modules during interactive testing.
+
+**Test failures you cannot reproduce:**
+- CI runs tests on a clean environment. Try running `nbdev_test` from a fresh virtual environment to rule out local state (cached models, leftover data files, environment variables).
+- Check that you are not relying on GPU-specific behavior; CI may run on CPU only.
+
+**Slow feedback loops:**
+- You do not need to run the full test suite for every change. Use `nbdev_test --fname nbs/<notebook>.ipynb` to test only the notebook you modified.
+- For quick sanity checks, open the notebook in Jupyter and run the affected cells interactively before exporting.
+
+**Common error patterns:**
+- `CUDA out of memory`: Reduce batch size or add `torch.cuda.empty_cache()` between experiments in the same notebook session.
+- `RuntimeError: Expected all tensors to be on the same device`: Ensure your model and data are both moved to the same device; check that custom transforms do not inadvertently return CPU tensors.
+- `nbdev_export` produces empty files: Verify your notebook cells start with `#|export` (not `# |export` or `#| export` with extra spaces in older nbdev versions).
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
