@@ -97,3 +97,22 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Contributing to Feature Requests and Bug Tracking
+
+This repository uses `FEATURE_REQUESTS.md` and `BUGS.md` to track community suggestions and known issues. When contributing to these files, follow these guidelines:
+
+### Adding a Feature Request
+
+1. Add your entry as a single line under the appropriate category (Data, Training, Vision, Text, Tabular, Callbacks, Deployment & Export, or Documentation & Tooling)
+2. Start with a verb (e.g., "Add", "Support", "Provide") and be specific about the expected behavior
+3. If a feature has been implemented, prefix it with `[DONE]` and append `-- implemented as ClassName` or `-- implemented in module.path` so others can find it
+
+### Reporting a Bug
+
+1. Add your entry under the `## Open` section of `BUGS.md` with the format: brief description, affected module, and steps to reproduce if possible
+2. When a bug is fixed, move the entry to the `## Fixed` section and note the fix (e.g., the PR number or commit)
+
+### Updating Existing Entries
+
+If you discover that a feature request is already implemented or a bug is already fixed, submit a PR that updates the entry accordingly. Mark features as `[DONE]` and move bugs to the Fixed section. This helps keep the tracking files accurate and saves maintainer time.
