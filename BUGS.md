@@ -9,6 +9,11 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `Learner.summary` does not count parameters for individual `ParameterModule` instances wrapped outside of hook-tracked layers (`fastai/callback/hook.py`)
 - `TfmdDL` padding uses `L.items.index` instead of `L.index` due to an unresolved upstream bug in `L` (`fastai/text/data.py`)
 - `CorpusBLEU.value` compares `self.counts` (a list) against integer `0`, so the empty-counts guard is never triggered, risking ZeroDivisionError (`fastai/metrics.py`)
+- `num_features_model` doubles `sz` indefinitely when the model raises exceptions for all input sizes, causing an infinite loop with unbounded memory growth (`fastai/callback/hook.py`)
+- `Optimizer.param_groups` setter reassigns the local loop variable `pg` instead of mutating `self.param_lists[i]`, so parameter group updates via this property are silently discarded (`fastai/optimizer.py`)
+- `combine_scheds` uses `assert sum(pcts) == 1.` with floating-point values, so schedules with pcts like `[0.3, 0.7]` can trigger an AssertionError due to imprecise float summation (`fastai/callback/schedule.py`)
+- `ActivationStats.hook` calls `.float()` on the output tensor unconditionally, which detaches the tensor from the autocast graph and can produce misleading statistics under mixed-precision training (`fastai/callback/hook.py`)
+- `DataLoader.new` does not propagate the `persistent_workers` argument to the reconstructed loader, so cloned DataLoaders silently revert to non-persistent workers regardless of the original setting (`fastai/data/load.py`)
 
 ## Fixed
 
