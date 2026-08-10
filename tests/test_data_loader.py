@@ -88,6 +88,20 @@ class TestFaCollate:
         assert result.shape == (3,)
         assert result.tolist() == [1.0, 2.0, 3.0]
 
+    def test_collate_integers(self):
+        """fa_collate should handle plain integers via default_collate."""
+        items = [1, 2, 3, 4]
+        result = fa_collate(items)
+        expected = torch.tensor([1, 2, 3, 4])
+        assert torch.equal(result, expected)
+
+    def test_collate_floats(self):
+        """fa_collate should handle plain floats via default_collate."""
+        items = [1.5, 2.5, 3.5]
+        result = fa_collate(items)
+        expected = torch.tensor([1.5, 2.5, 3.5])
+        assert torch.equal(result, expected)
+
 
 # ============================================================
 # Tests for `fa_convert`
@@ -139,6 +153,18 @@ class TestFaConvert:
         assert isinstance(result, list)
         assert isinstance(result[0], Tensor)
         assert isinstance(result[1], Tensor)
+
+    def test_convert_integer(self):
+        """fa_convert passes plain integers through default_convert."""
+        result = fa_convert(42)
+        assert result == 42
+
+    def test_convert_dict(self):
+        """fa_convert should handle dicts (Mapping type) via default_convert."""
+        d = {"x": np.array([1.0, 2.0])}
+        result = fa_convert(d)
+        assert "x" in result
+        assert torch.equal(result["x"], torch.tensor([1.0, 2.0]))
 
 
 # ============================================================
@@ -275,6 +301,42 @@ class TestDataLoaderConstruction:
         dl = DataLoader(ds, bs=None)
         assert dl.prebatched is True
 
+    def test_construction_explicit_n(self):
+        """DataLoader respects explicitly provided n."""
+        ds = list(range(100))
+        dl = DataLoader(ds, bs=10, n=50)
+        assert dl.n == 50
+
+    def test_construction_iterable_not_indexed(self):
+        """Iterable datasets should not be indexed."""
+        from torch.utils.data import IterableDataset
+
+        class MyIterableDs(IterableDataset):
+            def __iter__(self):
+                return iter(range(10))
+
+        ds = MyIterableDs()
+        dl = DataLoader(ds, bs=2, n=10)
+        assert dl.indexed is False
+
+    def test_construction_shuffle_requires_indexed(self):
+        """Shuffling a non-indexed dataset should raise ValueError."""
+        from torch.utils.data import IterableDataset
+
+        class MyIterableDs(IterableDataset):
+            def __iter__(self):
+                return iter(range(10))
+
+        ds = MyIterableDs()
+        with pytest.raises(ValueError, match="Can only shuffle an indexed dataset"):
+            DataLoader(ds, bs=2, n=10, shuffle=True)
+
+    def test_construction_drop_last_requires_bs(self):
+        """drop_last=True with bs=None should raise AssertionError."""
+        ds = list(range(10))
+        with pytest.raises(AssertionError):
+            DataLoader(ds, bs=None, drop_last=True)
+
 
 # ============================================================
 # Tests for DataLoader.__len__
@@ -313,6 +375,30 @@ class TestDataLoaderLen:
         with pytest.raises(TypeError):
             len(dl)
 
+    def test_len_drop_last_exact(self):
+        """drop_last with exact division gives same result."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=5, drop_last=True)
+        assert len(dl) == 2
+
+    def test_len_single_item(self):
+        """Dataset with 1 item, bs=1."""
+        ds = [42]
+        dl = DataLoader(ds, bs=1)
+        assert len(dl) == 1
+
+    def test_len_bs_larger_than_n(self):
+        """When bs > n, there is still 1 batch (not dropped)."""
+        ds = list(range(3))
+        dl = DataLoader(ds, bs=10)
+        assert len(dl) == 1
+
+    def test_len_bs_larger_than_n_drop_last(self):
+        """When bs > n and drop_last, there are 0 batches."""
+        ds = list(range(3))
+        dl = DataLoader(ds, bs=10, drop_last=True)
+        assert len(dl) == 0
+
 
 # ============================================================
 # Tests for DataLoader.get_idxs
@@ -343,6 +429,13 @@ class TestDataLoaderGetIdxs:
         dl = DataLoader(ds, bs=4, shuffle=True)
         idxs = dl.get_idxs()
         assert len(idxs) == 15
+
+    def test_get_idxs_with_explicit_n(self):
+        """get_idxs respects explicit n parameter."""
+        ds = list(range(100))
+        dl = DataLoader(ds, bs=5, n=10)
+        idxs = dl.get_idxs()
+        assert len(idxs) == 10
 
 
 # ============================================================
@@ -571,6 +664,19 @@ class TestDataLoaderDevice:
         dl = DataLoader(ds, bs=2)
         assert dl.device is None
 
+    def test_device_via_to(self):
+        """to() method sets device."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        dl.to('cpu')
+        assert dl.device == torch.device('cpu')
+
+    def test_device_init_param(self):
+        """Device can be set via init parameter."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, device='cpu')
+        assert dl.device == torch.device('cpu')
+
 
 # ============================================================
 # Tests for DataLoader iteration
@@ -638,3 +744,114 @@ class TestDataLoaderIteration:
         assert len(batches) == 2
         total_items = sum(len(b) for b in batches)
         assert total_items == 6
+
+    def test_iteration_multiple_epochs(self):
+        """DataLoader can be iterated multiple times."""
+        ds = list(range(4))
+        dl = DataLoader(ds, bs=2)
+        dl.retain = _identity_retain.__get__(dl, DataLoader)
+        epoch1 = list(dl)
+        epoch2 = list(dl)
+        assert len(epoch1) == 2
+        assert len(epoch2) == 2
+
+    def test_iteration_shuffle_different_order(self):
+        """Shuffled DataLoader produces different orders across epochs."""
+        ds = list(range(50))
+        dl = DataLoader(ds, bs=50, shuffle=True)
+        dl.retain = _identity_retain.__get__(dl, DataLoader)
+        epoch1 = list(dl)[0].tolist()
+        epoch2 = list(dl)[0].tolist()
+        # Both contain same elements
+        assert sorted(epoch1) == sorted(epoch2) == list(range(50))
+        # But very unlikely to be same order
+        assert epoch1 != epoch2
+
+
+# ============================================================
+# Tests for DataLoader prebatched (bs=None)
+# ============================================================
+
+class TestDataLoaderPrebatched:
+    """Tests for DataLoader with prebatched data (bs=None)."""
+
+    def test_prebatched_property(self):
+        """prebatched is True when bs is None."""
+        ds = [[1, 2, 3], [4, 5, 6]]
+        dl = DataLoader(ds, bs=None)
+        assert dl.prebatched is True
+
+    def test_not_prebatched(self):
+        """prebatched is False when bs is set."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        assert dl.prebatched is False
+
+    def test_prebatched_iteration(self):
+        """Prebatched DataLoader applies fa_convert instead of fa_collate."""
+        ds = [np.array([1.0, 2.0]), np.array([3.0, 4.0])]
+        dl = DataLoader(ds, bs=None)
+        dl.retain = _identity_retain.__get__(dl, DataLoader)
+        batches = list(dl)
+        assert len(batches) == 2
+        # Each batch is a converted numpy array (now a tensor)
+        assert isinstance(batches[0], torch.Tensor)
+        assert torch.equal(batches[0], torch.tensor([1.0, 2.0]))
+
+    def test_prebatched_len(self):
+        """len of prebatched DataLoader equals n."""
+        ds = [[1, 2], [3, 4], [5, 6], [7, 8]]
+        dl = DataLoader(ds, bs=None)
+        assert len(dl) == 4
+
+
+# ============================================================
+# Tests for DataLoader callbacks (before_iter, after_batch)
+# ============================================================
+
+class TestDataLoaderCallbacks:
+    """Tests for DataLoader callback hooks."""
+
+    def test_before_iter_called(self):
+        """before_iter is called at start of iteration."""
+        ds = list(range(4))
+        dl = DataLoader(ds, bs=2)
+        dl.retain = _identity_retain.__get__(dl, DataLoader)
+        called = []
+
+        def track_before_iter(x=None):
+            called.append("before_iter")
+            return x
+
+        dl.before_iter = track_before_iter
+        list(dl)
+        assert "before_iter" in called
+
+    def test_after_iter_called(self):
+        """after_iter is called at end of iteration."""
+        ds = list(range(4))
+        dl = DataLoader(ds, bs=2)
+        dl.retain = _identity_retain.__get__(dl, DataLoader)
+        called = []
+
+        def track_after_iter(x=None):
+            called.append("after_iter")
+            return x
+
+        dl.after_iter = track_after_iter
+        list(dl)
+        assert "after_iter" in called
+
+    def test_after_batch_transforms_batch(self):
+        """after_batch can transform each batch."""
+        ds = list(range(4))
+        dl = DataLoader(ds, bs=2)
+        dl.retain = _identity_retain.__get__(dl, DataLoader)
+
+        def double_batch(b):
+            return b * 2
+
+        dl.after_batch = double_batch
+        batches = list(dl)
+        # First batch should be [0,1]*2 = [0,2]
+        assert torch.equal(batches[0], torch.tensor([0, 2]))
