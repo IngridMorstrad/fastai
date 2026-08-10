@@ -97,3 +97,69 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Understanding Type Dispatch and Transform Pipelines
+
+fastai relies heavily on **type dispatch** (multiple dispatch based on argument types) and **transform pipelines** as core extension mechanisms. Understanding these concepts is essential for contributing effectively.
+
+### Type Dispatch Basics
+
+Type dispatch lets you define multiple implementations of the same function, each specialized for different input types. fastai uses this instead of traditional class inheritance for many operations:
+
+```python
+from fastcore.dispatch import typedispatch
+
+@typedispatch
+def show(x: TensorImage, ctx=None, **kwargs):
+    # Implementation for images
+    ...
+
+@typedispatch
+def show(x: TensorText, ctx=None, **kwargs):
+    # Implementation for text
+    ...
+```
+
+Key points for contributors:
+- Type-dispatched functions live in `fastcore.dispatch` and are used throughout the data pipeline
+- When adding support for a new data type, you typically add new type-dispatched overloads rather than modifying existing code
+- The dispatch resolution follows Python's MRO (Method Resolution Order), so more specific types take priority
+- If your new overload is not being called, check that your type annotations are correct and that the type hierarchy is what you expect
+
+### Transform Pipelines
+
+Transforms are the building blocks of fastai's data processing. Each `Transform` is a callable with optional `encodes` and `decodes` methods:
+
+```python
+class Normalize(Transform):
+    def encodes(self, x: TensorImage):
+        return (x - self.mean) / self.std
+
+    def decodes(self, x: TensorImage):
+        return x * self.std + self.mean
+```
+
+Important conventions:
+- `encodes` processes data forward (raw to model-ready); `decodes` reverses it (for visualization)
+- Transforms can be type-dispatched: define multiple `encodes` methods for different types and the correct one is called automatically
+- `Pipeline` chains multiple transforms and handles calling `encodes`/`decodes` in order
+- The `order` attribute controls transform execution priority within a pipeline (lower runs first)
+- `Transform.setup()` is called once on the training data to compute statistics (like vocabulary or normalization parameters)
+
+### Common Pitfalls
+
+| Mistake | Symptom | Fix |
+|---------|---------|-----|
+| Forgetting type annotations on `encodes` | Transform applies to all types unexpectedly | Add explicit type annotations to constrain dispatch |
+| Mutating input tensors in `encodes` | Subtle training bugs from shared references | Always return new tensors; use `.clone()` if needed |
+| Missing `decodes` method | `show_batch()` / `show_results()` crashes | Implement `decodes` for any invertible operation |
+| Wrong `order` value | Transforms execute in unexpected sequence | Check dependent transforms and set `order` accordingly |
+| Not calling `super().__init__()` | `setup()` or `setups()` not invoked | Always call `super().__init__()` in custom transforms |
+
+### Where to Find Examples
+
+- `fastai/data/transforms.py` - core transforms (Categorize, Normalize, etc.)
+- `fastai/vision/augment.py` - vision-specific transforms using type dispatch
+- `fastai/text/data.py` - text tokenization and numericalization transforms
+- `fastcore/dispatch.py` - the type dispatch implementation itself
+

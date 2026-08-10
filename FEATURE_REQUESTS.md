@@ -8,17 +8,20 @@ For discussions about features before implementation, please use the [fastai for
 
 - Add built-in support for streaming/iterable datasets that do not fit in memory (e.g. webdataset or HuggingFace IterableDataset integration)
 - Add support for automatic dataset versioning and lineage tracking so users can reproduce experiments by referencing a specific data snapshot
+- Add a `DataLoaders.to_parquet()` method that materializes the fully-transformed data pipeline to Parquet files, enabling caching of expensive pre-processing steps across multiple training runs
 
 ## Training
 
 - Support learning rate finder (`lr_find`) with multiple losses displayed on the same plot for multi-task models
 - Support automatic mixed-precision gradient scaling configuration per parameter group to allow selective full-precision training of sensitive layers (e.g. batch norm)
 - [DONE] Add a checkpoint averaging callback that maintains the top-K model checkpoints by validation loss and produces a weight-averaged model at the end of training for improved generalization -- implemented as `CheckpointAveragingCallback`
+- Add a `Learner.prune()` method for structured model pruning (channel and attention-head removal) with optional fine-tuning to recover accuracy after compression
 
 ## Vision
 
 - Add native support for ONNX model export with dynamic batch-size axes directly from `Learner`
 - [DONE] Add built-in GradCAM/Grad-CAM++ visualization support to highlight class-discriminative regions in image predictions -- implemented in `fastai.vision.gradcam`
+- Add built-in support for Vision Transformer (ViT) architectures in `vision_learner` with pretrained weight loading and patch-size configuration for fine-tuning on custom datasets
 
 ## Text
 
@@ -27,11 +30,13 @@ For discussions about features before implementation, please use the [fastai for
 ## Tabular
 
 - Allow incremental/online learning for tabular models so new data can be incorporated without full retraining
+- Add a `TabularLearner.partial_dependence_plot()` method that visualizes the marginal effect of individual features on model predictions to aid interpretability
 
 ## Callbacks
 
 - [DONE] Add a built-in EarlyStopping callback that supports monitoring multiple metrics with configurable logic (any/all) -- implemented as `MultiMetricEarlyStoppingCallback`
 - Add a built-in GPU memory profiling callback that logs peak GPU memory usage per training step to help users diagnose OOM issues
+- Add a `WandbSweepCallback` that integrates Weights & Biases hyperparameter sweeps into the training loop, reporting metrics and receiving trial configuration without boilerplate
 
 ## Deployment & Export
 
