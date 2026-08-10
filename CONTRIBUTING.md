@@ -97,3 +97,43 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Working with BUGS.md
+
+The `BUGS.md` file in the repository root tracks known bugs that affect the fastai library. It is organized into **Open** (unresolved) and **Fixed** (resolved) sections. Here is how to work with it:
+
+### Reporting a new bug
+
+1. Verify the bug has not already been reported by checking both sections of `BUGS.md` and the GitHub Issues list.
+2. Add a single bullet under the **Open** section using this format:
+   ```
+   - `ClassName.method` brief description of the incorrect behavior (`fastai/path/to/file.py`)
+   ```
+3. Include the affected file path in parentheses so others can locate the code quickly.
+4. If you also open a GitHub Issue, reference it in your PR description for cross-linking.
+
+### Verifying an open bug
+
+Before attempting a fix, confirm the bug still exists:
+
+1. Find the file and line referenced in the bug entry.
+2. Write a minimal test or script that triggers the incorrect behavior.
+3. If the code has already been corrected (e.g., by a previous PR), the entry should be moved to **Fixed** or removed from **Open** (see below).
+
+### Fixing a bug and updating BUGS.md
+
+When you submit a PR that fixes a bug listed in `BUGS.md`:
+
+1. Fix the code and add a test that fails before your fix and passes after.
+2. Move the bullet from the **Open** section to the **Fixed** section.
+3. Append a short note describing the fix after a ` - ` separator, for example:
+   ```
+   - `make_vocab` uses `f'xxfake'` without interpolating the loop variable ... (`fastai/text/data.py`) - fixed by interpolating loop variable `i` in f-string (`f'xxfake{i}'`)
+   ```
+4. If the entry already appears in **Fixed** (e.g., it was fixed in a prior commit but never removed from **Open**), simply delete the duplicate from the **Open** section.
+
+### Guidelines
+
+- Keep entries concise: one bullet, one bug.
+- Always reference the source file so reviewers can locate the code.
+- Do not remove entries from **Fixed** unless they were added in error; the section serves as a historical record.
