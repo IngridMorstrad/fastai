@@ -1,7 +1,6 @@
 #Code directly taken from NVIDIA apex: https://github.com/NVIDIA/apex
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 
 
@@ -50,7 +49,7 @@ def model_grads_to_master_grads(model_params, master_params, flat_master=False):
         for model, master in zip(model_params, master_params):
             if model.grad is not None:
                 if master.grad is None:
-                    master.grad = Variable(master.data.new(*master.data.size()))
+                    master.grad = torch.zeros_like(master.data)
                 master.grad.data.copy_(model.grad.data)
             else:
                 master.grad = None

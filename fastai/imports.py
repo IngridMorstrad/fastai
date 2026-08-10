@@ -1,7 +1,7 @@
 import numpy as np
 
 import io,operator,sys,os,re,mimetypes,csv,itertools,json,shutil,glob,pickle,tarfile,collections
-import hashlib,itertools,types,inspect,functools,random,time,math,bz2,typing,numbers,string
+import hashlib,types,inspect,functools,random,time,math,bz2,typing,numbers,string
 import multiprocessing,threading,urllib,tempfile,concurrent.futures,matplotlib,warnings,zipfile
 
 from concurrent.futures import as_completed
