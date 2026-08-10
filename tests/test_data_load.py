@@ -718,3 +718,306 @@ class TestDataLoaderIntegration:
         batches = list(dl)
         assert len(batches) == 1
         assert batches[0].shape == (5,)
+
+
+# ============================================================
+# Additional fa_collate tests (merged from test_dataloader.py)
+# ============================================================
+
+class TestFaCollateExtended:
+    """Additional fa_collate tests for integer and float inputs."""
+
+    def test_collate_integers(self):
+        """fa_collate should handle plain integers via default_collate."""
+        items = [1, 2, 3, 4]
+        result = fa_collate(items)
+        expected = torch.tensor([1, 2, 3, 4])
+        assert torch.equal(result, expected)
+
+    def test_collate_floats(self):
+        """fa_collate should handle plain floats via default_collate."""
+        items = [1.5, 2.5, 3.5]
+        result = fa_collate(items)
+        expected = torch.tensor([1.5, 2.5, 3.5])
+        assert torch.equal(result, expected)
+
+
+# ============================================================
+# Additional fa_convert tests (merged from test_dataloader.py)
+# ============================================================
+
+class TestFaConvertExtended:
+    """Additional fa_convert tests for integers and dict/tuple/list types."""
+
+    def test_convert_integer(self):
+        """fa_convert passes plain integers through default_convert (returns as-is)."""
+        result = fa_convert(42)
+        assert result == 42
+
+    def test_convert_dict(self):
+        """fa_convert should handle dicts (Mapping type) via default_convert."""
+        d = {"x": np.array([1.0, 2.0])}
+        result = fa_convert(d)
+        assert "x" in result
+        assert torch.equal(result["x"], torch.tensor([1.0, 2.0]))
+
+    def test_convert_tuple(self):
+        """fa_convert should handle tuples (Sequence) by converting each element."""
+        t = (np.array([1.0]), np.array([2.0]))
+        result = fa_convert(t)
+        assert isinstance(result, tuple)
+        assert torch.equal(result[0], torch.tensor([1.0]))
+        assert torch.equal(result[1], torch.tensor([2.0]))
+
+    def test_convert_list(self):
+        """fa_convert should handle lists (Sequence) by converting each element."""
+        t = [np.array([1.0]), np.array([2.0])]
+        result = fa_convert(t)
+        assert isinstance(result, list)
+        assert torch.equal(result[0], torch.tensor([1.0]))
+        assert torch.equal(result[1], torch.tensor([2.0]))
+
+
+# ============================================================
+# Tests for collate_error with detailed shape info
+# (merged from test_data_loader.py)
+# ============================================================
+
+class TestCollateErrorDetailed:
+    """Detailed tests for collate_error shape mismatch reporting."""
+
+    def test_raises_on_shape_mismatch(self):
+        """Should raise with a descriptive error message when shapes mismatch."""
+        batch = [
+            (torch.tensor([1, 2, 3]),),    # shape (3,)
+            (torch.tensor([1, 2, 3, 4]),), # shape (4,)
+        ]
+        e = RuntimeError("original error")
+        with pytest.raises(RuntimeError) as exc_info:
+            try:
+                raise e
+            except RuntimeError:
+                collate_error(e, batch)
+        error_msg = str(exc_info.value)
+        assert 'Mismatch found' in error_msg
+        assert 'axis 0' in error_msg
+
+    def test_error_message_contains_shapes(self):
+        """The error message should include both shapes that differ."""
+        batch = [
+            (torch.zeros(3, 4),),
+            (torch.zeros(3, 5),),
+        ]
+        e = RuntimeError("collate failed")
+        with pytest.raises(RuntimeError) as exc_info:
+            try:
+                raise e
+            except RuntimeError:
+                collate_error(e, batch)
+        error_msg = str(exc_info.value)
+        assert 'torch.Size([3, 4])' in error_msg
+        assert 'torch.Size([3, 5])' in error_msg
+
+    def test_no_raise_when_shapes_match(self):
+        """Should not raise when all items have the same shape."""
+        batch = [
+            (torch.zeros(3, 4),),
+            (torch.zeros(3, 4),),
+        ]
+        e = RuntimeError("original error")
+        try:
+            raise e
+        except RuntimeError:
+            collate_error(e, batch)
+
+
+# ============================================================
+# Tests for DataLoader.create_item (merged from test_data_loader.py)
+# ============================================================
+
+class TestDataLoaderCreateItem:
+    """Tests for DataLoader.create_item method."""
+
+    def test_create_item_indexed(self):
+        """With indexed dataset, create_item should return dataset[s]."""
+        ds = [10, 20, 30, 40, 50]
+        dl = DataLoader(ds, bs=2)
+        assert dl.create_item(0) == 10
+        assert dl.create_item(2) == 30
+        assert dl.create_item(4) == 50
+
+    def test_create_item_non_indexed(self):
+        """With non-indexed dataset, create_item(None) should use the iterator."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False)
+        dl.it = iter([10, 20, 30])
+        assert dl.create_item(None) == 10
+        assert dl.create_item(None) == 20
+        assert dl.create_item(None) == 30
+
+    def test_create_item_non_indexed_raises_on_numeric_index(self):
+        """Non-indexed dataset should raise IndexError when given a numeric index."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False)
+        dl.it = iter([10, 20, 30])
+        with pytest.raises(IndexError, match="Cannot index an iterable dataset"):
+            dl.create_item(0)
+
+
+# ============================================================
+# Tests for DataLoader.do_item extended (merged from test_dataloader.py)
+# ============================================================
+
+class TestDataLoaderDoItemExtended:
+    """Extended tests for DataLoader.do_item behavior."""
+
+    def test_do_item_normal_return(self):
+        """do_item returns the item when no exception is raised."""
+        ds = list(range(5))
+        dl = DataLoader(ds, bs=2)
+        result = dl.do_item(0)
+        assert result == 0
+
+    def test_do_item_returns_none_on_skip(self):
+        """do_item returns None when SkipItemException is raised."""
+        ds = list(range(5))
+        dl = DataLoader(ds, bs=2)
+
+        def after_item_that_skips(x):
+            if x == 2:
+                raise SkipItemException()
+            return x
+
+        dl.after_item = after_item_that_skips
+        result = dl.do_item(2)
+        assert result is None
+
+    def test_skip_item_during_iteration(self):
+        """Items that raise SkipItemException are filtered out during iteration."""
+        ds = list(range(6))
+        dl = DataLoader(ds, bs=2, shuffle=False, num_workers=0)
+
+        def skip_odds(x):
+            if x % 2 != 0:
+                raise SkipItemException()
+            return x
+
+        dl.after_item = skip_odds
+        batches = list(dl)
+        all_items = torch.cat(batches).tolist()
+        assert all_items == [0, 2, 4]
+
+
+# ============================================================
+# Tests for DataLoader device extended (merged from test_dataloader.py)
+# ============================================================
+
+class TestDataLoaderDeviceExtended:
+    """Extended tests for DataLoader device property."""
+
+    def test_device_default_none(self):
+        """Device is None by default."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        assert dl.device is None
+
+    def test_device_init_param(self):
+        """Device can be set via init parameter."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, device='cpu')
+        assert dl.device == torch.device('cpu')
+
+    def test_device_set_cpu(self):
+        """Device can be set to cpu via property setter."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        dl.device = 'cpu'
+        assert dl.device == torch.device('cpu')
+
+    def test_device_via_to(self):
+        """to() method sets device."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        dl.to('cpu')
+        assert dl.device == torch.device('cpu')
+
+
+# ============================================================
+# Tests for DataLoader before/after iter hooks
+# (merged from test_dataloader.py)
+# ============================================================
+
+class TestDataLoaderBeforeAfterIter:
+    """Tests for DataLoader before_iter and after_iter hooks."""
+
+    def test_before_iter_called(self):
+        """before_iter is called at start of iteration."""
+        ds = list(range(4))
+        dl = DataLoader(ds, bs=2, num_workers=0)
+        called = []
+
+        def track_before_iter(x=None):
+            called.append("before_iter")
+            return x
+
+        dl.before_iter = track_before_iter
+        list(dl)
+        assert "before_iter" in called
+
+    def test_after_iter_called(self):
+        """after_iter is called at end of iteration."""
+        ds = list(range(4))
+        dl = DataLoader(ds, bs=2, num_workers=0)
+        called = []
+
+        def track_after_iter(x=None):
+            called.append("after_iter")
+            return x
+
+        dl.after_iter = track_after_iter
+        list(dl)
+        assert "after_iter" in called
+
+
+# ============================================================
+# Tests for DataLoader after_batch transform
+# (merged from test_dataloader.py)
+# ============================================================
+
+class TestDataLoaderAfterBatch:
+    """Tests for DataLoader after_batch transformations."""
+
+    def test_after_batch_transforms_batch(self):
+        """after_batch can transform each batch."""
+        ds = list(range(4))
+        dl = DataLoader(ds, bs=2, num_workers=0)
+
+        def double_batch(b):
+            return b * 2
+
+        dl.after_batch = double_batch
+        batches = list(dl)
+        assert torch.equal(batches[0], torch.tensor([0, 2]))
+
+
+# ============================================================
+# Tests for DataLoader.get_idxs extended
+# (merged from test_data_loader.py)
+# ============================================================
+
+class TestDataLoaderGetIdxsExtended:
+    """Extended tests for DataLoader.get_idxs method."""
+
+    def test_get_idxs_length_matches_n(self):
+        """get_idxs should return exactly n indices."""
+        ds = list(range(15))
+        dl = DataLoader(ds, bs=4, shuffle=True)
+        idxs = dl.get_idxs()
+        assert len(idxs) == 15
+
+    def test_get_idxs_with_explicit_n(self):
+        """get_idxs respects explicit n parameter."""
+        ds = list(range(100))
+        dl = DataLoader(ds, bs=5, n=10)
+        idxs = dl.get_idxs()
+        assert len(idxs) == 10

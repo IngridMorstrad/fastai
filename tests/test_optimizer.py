@@ -31,12 +31,6 @@ def _make_linear_model(in_features=4, out_features=2):
     return model
 
 
-def _set_grad(model, value=1.0):
-    """Set all parameter gradients to a constant value."""
-    for p in model.parameters():
-        p.grad = torch.full_like(p, value)
-
-
 def _get_params_with_grad(model, grad_value=1.0):
     """Get model params with synthetic gradients set."""
     params = list(model.parameters())

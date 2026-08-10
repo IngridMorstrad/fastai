@@ -54,6 +54,20 @@ Furthermore, you can run tests in parallel by launching [`nbdev_test`](https://n
 If you'd like to learn the nbdev commands available and more about the project, please visit [`the docs`](https://nbdev.fast.ai/getting_started.html#how-to-use-nbdev).
 
 
+## Test File Naming and Organization
+
+To keep the test suite maintainable and avoid duplicated effort:
+
+- **One test file per module**: Each test file should correspond to exactly one library module. Use the naming convention `test_<module_path>.py` where dots and slashes become underscores. For example, `fastai/data/load.py` is tested in `tests/test_data_load.py`.
+
+- **Check before creating**: Before writing a new test file, check if one already exists for that module. Run `ls tests/` and look for existing coverage.
+
+- **Shared fixtures in conftest.py**: Common test fixtures, path setup, and helper utilities belong in `tests/conftest.py` rather than duplicated across test files.
+
+- **Test class grouping**: Group related tests into classes named `Test<ComponentName>` (e.g., `TestFaCollate`, `TestDataLoaderLen`). This makes it easy to run subsets with `pytest tests/test_file.py::TestClassName`.
+
+- **Helper functions**: Prefix internal test helpers with underscore (e.g., `_make_simple_model()`). If a helper is used by multiple test files, move it to `conftest.py` or a `tests/_helpers.py` module.
+
 ## PR submission guidelines
 
 * Keep each PR focused. While it's more convenient, do not combine several unrelated fixes together. Create as many branches as needing to keep each PR focused.
