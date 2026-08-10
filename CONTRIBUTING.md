@@ -83,6 +83,32 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Working with FEATURE_REQUESTS.md
+
+The `FEATURE_REQUESTS.md` file tracks community-requested features. Here is how to work with it effectively:
+
+**Adding a new feature request:**
+1. Choose the correct category section (Data, Training, Vision, Text, Tabular, Callbacks, Deployment & Export, or Documentation & Tooling). A feature belongs in the section matching the *domain it applies to most broadly* -- for example, a training technique that works across vision, text, and tabular belongs in **Training**, not in a single modality section.
+2. Add a single line starting with `- ` followed by a concise description of the feature.
+3. Keep descriptions to one line. If more context is needed, link to a forum discussion.
+
+**Marking a feature as done:**
+1. Prefix the line with `[DONE] ` immediately after the `- `.
+2. Append ` -- implemented as \`ClassName\`` or ` -- implemented in \`module.path\`` so others can find the implementation.
+3. Do not remove completed features; keeping them visible helps avoid duplicate requests.
+
+**Choosing the right category:**
+| If the feature is about... | Put it under |
+|---|---|
+| Loading, transforming, or versioning data | Data |
+| Training loops, optimizers, schedulers, fine-tuning techniques | Training |
+| Image-specific models or transforms | Vision |
+| NLP-specific tokenizers or models | Text |
+| Tabular-specific processing or models | Tabular |
+| Callback implementations | Callbacks |
+| Model export, serving, or inference benchmarking | Deployment & Export |
+| CLI tools, environment checks, or logging utilities | Documentation & Tooling |
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
