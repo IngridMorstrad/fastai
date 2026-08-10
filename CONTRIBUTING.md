@@ -97,3 +97,27 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Troubleshooting Common Issues
+
+Below are solutions to problems contributors frequently encounter when working with the fastai codebase.
+
+### `nbdev_export` produces unexpected diffs
+
+If running `nbdev_export` generates changes you did not expect, make sure you have run `nbdev_install_hooks` after cloning. The hooks strip transient notebook metadata (cell execution counts, widget state) that would otherwise show up as spurious diffs. If the problem persists, try `nbdev_clean --clear_all` before exporting.
+
+### Tests fail with `ModuleNotFoundError` for a fastai submodule
+
+This usually means the library has not been installed in editable mode. Run `pip install -e ".[dev]"` from the repository root so that Python resolves imports against your local checkout rather than a stale installed copy.
+
+### CI fails on `git status --porcelain -uno` check
+
+The CI pipeline runs `nbdev_export` and then asserts the working tree is clean. If this check fails on your PR it means the notebook and the generated `.py` file are out of sync. Run `nbdev_export` locally, commit the resulting changes, and push again.
+
+### GPU-related tests fail on a CPU-only machine
+
+Some test notebooks require a CUDA device. You can skip GPU tests locally by passing `--skip_file_re 'gpu'` to `nbdev_test`, or by setting the environment variable `FASTAI_TEST_CPU_ONLY=1` before running the test suite.
+
+### Merge conflicts in notebook JSON files
+
+Notebook `.ipynb` files are JSON and prone to ugly merge conflicts. The safest approach is to accept the upstream version of the notebook (`git checkout --theirs <file>.ipynb`), reapply your changes manually, then re-run `nbdev_export` to regenerate the library code.
