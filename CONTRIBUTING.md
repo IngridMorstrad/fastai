@@ -83,6 +83,32 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Contributing Performance Improvements and Benchmarks
+
+Performance is critical in deep learning frameworks. If you want to contribute optimizations or benchmark results, follow these guidelines:
+
+### Before You Optimize
+
+1. **Profile first** - Use `torch.profiler` or `line_profiler` to identify the actual bottleneck. Never optimize based on assumptions.
+2. **Establish a baseline** - Record timing and memory usage on a reproducible workload (fixed seed, fixed data) before making changes.
+3. **Check existing issues** - Search the forum and GitHub issues for prior discussion about the area you plan to optimize.
+
+### Writing Benchmarks
+
+- Place benchmark scripts in a `benchmarks/` directory at the repo root if one exists, or propose creating one in your PR.
+- Each benchmark should be self-contained: it should generate or download its own small dataset (prefer synthetic data for speed).
+- Include a `# Environment` comment at the top listing the hardware (GPU model, CPU, RAM) and software (PyTorch version, CUDA version) you used.
+- Report wall-clock time, peak GPU memory, and throughput (samples/sec) as applicable.
+- Run each measurement at least 3 times and report the median to reduce noise from system variability.
+
+### Submitting Performance PRs
+
+- Title your PR with a `perf:` prefix (e.g., `perf: vectorize label encoding in TabularPandas`).
+- In the PR description, include before/after numbers with the exact script used to measure them.
+- Ensure your optimization does not change numerical results beyond floating-point tolerance. Add a test that compares outputs against the original implementation if the change is non-trivial.
+- Avoid micro-optimizations that sacrifice readability unless the speed gain is substantial (>10% on a realistic workload).
+- If your change is GPU-specific, note which architectures you tested on (e.g., Ampere, Volta) since behavior can vary.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
