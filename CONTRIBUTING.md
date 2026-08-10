@@ -83,6 +83,69 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Working with fastai's Type Dispatch System
+
+fastai makes heavy use of type dispatch (via `typedispatch` and typed `encodes`/`decodes` methods) to specialize behavior by tensor or data type. Understanding this system is essential for contributing transforms, loss functions, and show methods.
+
+### How Type Dispatch Works
+
+Type dispatch selects which method implementation to call based on the runtime type of the arguments. In fastai, this powers the transform pipeline:
+
+```python
+from fastai.vision.all import *
+
+class IntToFloatTensor(DisplayedTransform):
+    def encodes(self, o:TensorImage): return o.float().div_(255.)
+    def encodes(self, o:TensorMask):  return o.long()
+```
+
+Both `encodes` definitions coexist. When the transform is called with a `TensorImage`, the first is used; with a `TensorMask`, the second. This is **not** standard Python method overriding; the `Transform` metaclass collects all typed signatures.
+
+### Common Pitfalls
+
+1. **Missing type annotation reverts to catch-all**: If you define `def encodes(self, o):` without a type, it becomes the fallback for all types and may shadow more specific implementations defined earlier.
+
+2. **Inheritance matters**: `TensorImage` inherits from `TensorImageBase` which inherits from `TensorBase`. A dispatch registered for `TensorBase` will match `TensorImage` unless a more specific dispatch exists. Always register from most specific to least specific.
+
+3. **`typedispatch` on free functions**: For `show_batch` and `show_results`, dispatch is done on the `x` and `y` arguments:
+   ```python
+   @typedispatch
+   def show_batch(x: TensorImage, y: TensorCategory, samples, ctxs=None, ...):
+       ...
+   ```
+   If your data type is a subclass of `TensorImage`, the existing dispatch will match. Only register a new one if behavior truly differs.
+
+4. **`decodes` must mirror `encodes`**: If your `encodes` changes the type (e.g., from `Category` to `TensorCategory`), the corresponding `decodes` must accept the output type and return the original type. A type mismatch here causes silent failures in `show_batch`.
+
+5. **Order sensitivity with `Pipeline`**: Transforms in a `Pipeline` are called in order. Type dispatch applies per-transform, not globally. If an earlier transform changes the type, later transforms see the new type.
+
+### Testing Type-Dispatched Code
+
+```python
+# Verify dispatch resolution
+from fastcore.dispatch import typedispatch
+
+# Check which implementation is selected
+tfm = IntToFloatTensor()
+assert tfm.encodes(TensorImage(torch.zeros(3,4,4))).dtype == torch.float32
+assert tfm.encodes(TensorMask(torch.zeros(4,4))).dtype == torch.int64
+```
+
+When adding a new dispatched method, always test with:
+- The exact target type
+- A subclass of the target type (to verify specificity)
+- A type that should NOT match (to verify no false positives)
+
+### Registering Custom Types
+
+If you create a new semantic tensor type:
+
+```python
+class TensorAudio(TensorBase): pass
+```
+
+Then register dispatches for it in the relevant modules (`show_batch`, transforms, etc.). Check that your type works through the full `DataLoader` pipeline by calling `dls.show_batch()` and verifying output.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:

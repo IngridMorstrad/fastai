@@ -9,6 +9,11 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `Learner.summary` does not count parameters for individual `ParameterModule` instances wrapped outside of hook-tracked layers (`fastai/callback/hook.py`)
 - `TfmdDL` padding uses `L.items.index` instead of `L.index` due to an unresolved upstream bug in `L` (`fastai/text/data.py`)
 - `CorpusBLEU.value` compares `self.counts` (a list) against integer `0`, so the empty-counts guard is never triggered, risking ZeroDivisionError (`fastai/metrics.py`)
+- `DcmDataset.scaled_px` has incorrect operator precedence: `hasattr(self, 'RescaleSlope') and hasattr(self, 'RescaleIntercept') is not None` always evaluates to True because `is not None` binds to the bool returned by `hasattr`, not to a value check (`fastai/medical/imaging.py`)
+- `log_dataset` and `log_model` use `raise f'...'` which raises `TypeError` in Python 3 instead of the intended error message; should be `raise ValueError(f'...')` (`fastai/callback/wandb.py`)
+- `MultiMetricEarlyStoppingCallback.__init__` double-applies sign adjustment when `min_delta` is a list: the second code block unconditionally multiplies list entries by -1 for `np.less` comparators, corrupting user-supplied values (`fastai/callback/tracker.py`)
+- `CSVLogger.before_fit` calls `self.path.parent.mkdir(...)` which creates the learner path's parent, not the directory for the CSV file; if `self.fname` contains subdirectories, the file open will fail with `FileNotFoundError` (`fastai/callback/progress.py`)
+- `ShowGraphCallback.after_epoch` unconditionally indexes `rec.values` entries at position 1 (`val_losses = [v[1] for v in rec.values]`), which raises `IndexError` if validation was cancelled mid-epoch or if `Recorder` was configured with `valid_metrics=False` (`fastai/callback/progress.py`)
 
 ## Fixed
 
