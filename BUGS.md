@@ -9,6 +9,11 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `Learner.summary` does not count parameters for individual `ParameterModule` instances wrapped outside of hook-tracked layers (`fastai/callback/hook.py`)
 - `TfmdDL` padding uses `L.items.index` instead of `L.index` due to an unresolved upstream bug in `L` (`fastai/text/data.py`)
 - `CorpusBLEU.value` compares `self.counts` (a list) against integer `0`, so the empty-counts guard is never triggered, risking ZeroDivisionError (`fastai/metrics.py`)
+- `fit_flat_cos` ignores its `start_epoch` parameter and always passes `start_epoch=0` to `self.fit` (`fastai/callback/schedule.py`)
+- `sched_exp` raises `ZeroDivisionError` when `start` is 0 because it computes `(end/start) ** pos` without guarding against zero (`fastai/callback/schedule.py`)
+- `DataLoader.new` does not forward the `persistent_workers` setting to the cloned loader, defaulting it to `False` even if the original had it enabled (`fastai/data/load.py`)
+- `Learner.export` unconditionally calls `self.create_opt()` after saving, which overwrites `self.opt` with a fresh optimizer even when it was previously `None` (`fastai/learner.py`)
+- `DistributedDL._broadcast` calls `.cuda()` unconditionally on tensors, causing a RuntimeError when CUDA is not available (`fastai/distributed.py`)
 
 ## Fixed
 

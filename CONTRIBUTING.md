@@ -83,6 +83,58 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Running Tests Locally
+
+Before submitting a PR, run the test suite locally to catch regressions early.
+
+### Prerequisites
+
+1. Install the library in development mode:
+   ```bash
+   pip install -e ".[dev]"
+   ```
+2. Make sure you have `nbdev` installed (required for notebook-based tests):
+   ```bash
+   pip install nbdev
+   ```
+
+### Running the full test suite
+
+Use `nbdev_test` to run all notebook-based tests:
+```bash
+nbdev_test
+```
+
+To see which notebooks are being tested, add the `--do_print` flag:
+```bash
+nbdev_test --do_print
+```
+
+### Running specific tests
+
+To test a single notebook (useful when your change only affects one module):
+```bash
+nbdev_test --fname nbs/13a_learner.ipynb
+```
+
+You can also run standard pytest tests located in the `tests/` directory:
+```bash
+pytest tests/ -x -q
+```
+
+### Running tests in parallel
+
+For faster feedback on machines with multiple cores:
+```bash
+nbdev_test --n_workers 4
+```
+
+### Common issues
+
+- **GPU tests on CPU-only machines**: Some tests require a CUDA-capable GPU. If you do not have one, those tests will be skipped automatically.
+- **Notebook state**: If tests fail unexpectedly, try restarting your kernel or clearing notebook outputs with `nbdev_clean` before re-running.
+- **Import errors after editing library files**: Run `nbdev_update` to sync your `.py` changes back into the notebooks before testing.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
