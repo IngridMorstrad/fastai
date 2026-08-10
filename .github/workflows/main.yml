@@ -27,7 +27,7 @@ jobs:
         run: |
           pip install "setuptools<72" wheel
           pip install --no-build-isolation git+https://github.com/fastai/fastcore.git@master
-          pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@a31e95986605
+          pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@a31e95986605  # pinned: nbdev main requires execnb>=0.3.2 which is not yet on PyPI (2026-08-10)
           pip install --no-deps -e .
       - name: Check nbdev sync
         run: |
