@@ -83,6 +83,44 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Debugging and Profiling Models
+
+When investigating training issues or performance regressions, fastai provides several built-in tools:
+
+### Using Callbacks for Debugging
+
+Callbacks are the primary mechanism for inspecting training state. You can write a quick debugging callback:
+
+```python
+from fastai.callback.core import Callback
+
+class DebugCallback(Callback):
+    def after_batch(self):
+        if self.training:
+            print(f"Batch {self.iter}: loss={self.loss.item():.4f}, "
+                  f"grad_norm={self.opt.grad_params()[0].grad.norm().item():.4f}")
+```
+
+### Built-in Profiling Tools
+
+- **`Learner.summary()`** - Shows model architecture and parameter counts per layer
+- **`ActivationStats`** callback - Records activation statistics (mean/std) for each layer during training, useful for diagnosing vanishing/exploding gradients
+- **`CSVLogger`** callback - Logs all metrics to a CSV file for offline analysis
+
+### Common Debugging Workflows
+
+1. **Gradient issues**: Use `ActivationStats` to check whether activations are collapsing to zero or exploding. Plot results with `learn.activation_stats.plot_layer_stats(idx)`.
+2. **Learning rate problems**: Run `learn.lr_find()` before training to identify a suitable learning rate range.
+3. **Data pipeline issues**: Call `dls.show_batch()` to visually inspect what the model is actually receiving after all transforms are applied.
+4. **Memory profiling**: Use `torch.cuda.memory_summary()` after a training step to identify unexpected memory consumption. Reduce batch size or use `GradientAccumulation` callback if memory is tight.
+
+### Tips for Contributors Debugging Failures
+
+- Always check `learn.recorder.plot_loss()` to compare train vs. validation loss curves.
+- When writing tests that involve training, use `synth_learner()` from `fastai.test_utils` for fast, deterministic test runs.
+- If a test is flaky due to random initialization, set `torch.manual_seed()` at the start of the test.
+- Use `with learn.no_bar(): learn.fit(...)` to suppress progress bars during test output.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
