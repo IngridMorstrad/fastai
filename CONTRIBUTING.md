@@ -83,6 +83,38 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Migrating Code Contributions from fastai v1 to v2
+
+If you are porting a feature, fix, or example from fastai v1, keep the following differences in mind:
+
+### Key API changes
+
+| v1 pattern | v2 equivalent | Notes |
+|---|---|---|
+| `DataBunch.create(...)` | `DataLoaders(train_dl, valid_dl)` | DataLoaders is a thin wrapper; create the underlying DataLoader objects with `TfmdDL` |
+| `Learner(data, model, ...)` | `Learner(dls, model, ...)` | The first argument is now a `DataLoaders` instance, not a `DataBunch` |
+| `fit_one_cycle(cyc_len, max_lr)` | `fit_one_cycle(n_epoch, lr_max)` | Parameter names changed; `lr_max` replaces `max_lr` |
+| `ItemList.from_folder(...)` | `DataBlock(...).dataloaders(path)` | The mid-level `DataBlock` API replaces the `ItemList` pipeline |
+| `callback_fns=[...]` | `cbs=[...]` | Callbacks are passed as instances, not classes/factories |
+
+### Transform pipeline differences
+
+- v1 transforms are plain functions applied via `ItemList.add_tfms()`; v2 transforms are `Transform` subclasses with `encodes`/`decodes` methods that enable reversible pipelines.
+- Type dispatch means you define transforms once and they apply differently depending on whether the input is a `TensorImage`, `TensorText`, or `Category`. When porting, ensure your transform has proper type annotations.
+- v2 transforms can carry state through the `setup()` method (e.g., vocabulary, normalization statistics). Prefer this over global variables or class-level caches from v1.
+
+### Testing ported code
+
+1. Confirm the v1 behavior you are porting still makes sense in v2 - some features were intentionally removed or redesigned.
+2. Write your test against the v2 API from the start rather than adapting a v1 test. The test infrastructure uses `pytest` with fixtures defined in `conftest.py`.
+3. If the ported feature touches a notebook, remember that `nbdev_export` must be run to regenerate the `.py` files - edits to the generated files will be overwritten.
+
+### Common pitfalls when porting
+
+- **Importing from moved modules**: Many v1 utilities moved from `fastai.core` to `fastcore.foundation` or `fastcore.basics`. Check `fastcore` first if an import fails.
+- **`Callback` ordering**: v2 uses an explicit `order` attribute (lower runs first). If your v1 callback assumed a specific execution order relative to other callbacks, set `order` explicitly.
+- **`L` vs plain lists**: v2 uses the `L` container pervasively. It supports indexing with lists/masks and has different iteration semantics than a plain Python list. Wrap outputs in `L()` when the downstream API expects it.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
