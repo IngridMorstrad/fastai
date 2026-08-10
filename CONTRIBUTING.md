@@ -97,3 +97,71 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+
+## How to Run a Single Test
+
+Running the full test suite can be slow, especially during iterative development. Here is how to run individual tests or test files to get faster feedback.
+
+### Run a single test file
+
+```bash
+python -m pytest tests/test_data_loader.py -v
+```
+
+### Run a single test class
+
+```bash
+python -m pytest tests/test_data_loader.py::TestDataLoaderLen -v
+```
+
+### Run a single test function
+
+```bash
+python -m pytest tests/test_data_loader.py::TestDataLoaderLen::test_len_exact_division -v
+```
+
+### Run tests matching a keyword expression
+
+```bash
+python -m pytest tests/ -k "shuffle" -v
+```
+
+This runs only tests whose names contain "shuffle".
+
+### Show full output (no capture)
+
+```bash
+python -m pytest tests/test_layers.py -v -s
+```
+
+The `-s` flag disables output capture so you can see print statements and debug output.
+
+### Stop on first failure
+
+```bash
+python -m pytest tests/test_metrics.py -x
+```
+
+The `-x` flag stops after the first failing test, which is useful when diagnosing a chain of related failures.
+
+### Run tests in parallel (requires pytest-xdist)
+
+```bash
+pip install pytest-xdist
+python -m pytest tests/ -n auto
+```
+
+### GPU vs CPU testing
+
+Most tests in this repository are designed to run on CPU. Tests that require a GPU are typically marked or skipped automatically when no CUDA device is available. If you want to force CPU-only execution (for example, on a machine with a GPU where you do not want to consume VRAM), set:
+
+```bash
+CUDA_VISIBLE_DEVICES="" python -m pytest tests/ -v
+```
+
+If a test requires GPU and you do not have one, you can skip it explicitly:
+
+```bash
+python -m pytest tests/ -v -k "not gpu"
+```
