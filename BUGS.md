@@ -10,6 +10,12 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `TfmdDL` padding uses `L.items.index` instead of `L.index` due to an unresolved upstream bug in `L` (`fastai/text/data.py`)
 - `CorpusBLEU.value` compares `self.counts` (a list) against integer `0`, so the empty-counts guard is never triggered, risking ZeroDivisionError (`fastai/metrics.py`)
 
+- `_get_default` in `vision/augment.py` assigns `'bilinear'` interpolation mode for `TensorMask` instead of `'nearest'`, causing mask labels to be incorrectly interpolated during batch augmentation transforms (`fastai/vision/augment.py`)
+- `Normalize.decodes` uses `noop` when `x` is on a non-CPU device, so if `self.mean`/`self.std` reside on CPU the denormalization raises a device-mismatch error instead of moving stats to the correct device (`fastai/data/transforms.py`)
+- `ShowGraphCallback.after_epoch` passes `max(Tensor(...))` results directly into `y_bounds`, yielding single-element tensors instead of Python floats, which can break matplotlib backends that require plain numeric bounds (`fastai/callback/progress.py`)
+- `GradientAccumulation` resets its counter only when `self.count >= n_acc`, so accumulated gradients from the final batches of an epoch are silently discarded if their total size does not reach `n_acc` (`fastai/callback/training.py`)
+- `Optimizer.param_groups` setter assigns `pg = v_['params']` to a local variable instead of mutating the list in-place, so the parameter groups are never actually updated (`fastai/optimizer.py`)
+
 ## Fixed
 
 - `make_vocab` uses `f'xxfake'` without interpolating the loop variable, producing duplicate padding tokens instead of unique ones (`fastai/text/data.py`) - fixed by interpolating loop variable `i` in f-string (`f'xxfake{i}'`)
