@@ -97,3 +97,29 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Working with BUGS.md
+
+The project tracks known bugs in `BUGS.md` at the repository root. This file has two sections: **Open** (confirmed but unresolved) and **Fixed** (resolved with a short explanation of the fix). Follow these guidelines when working with it:
+
+### Adding a new bug entry
+
+1. Verify the bug exists by reading the relevant source code and confirming the described behavior.
+2. Add a single-line entry under **Open** with the format: `` - `ClassName.method` brief description of the incorrect behavior (`path/to/file.py`) ``
+3. Include enough detail for another contributor to locate and reproduce the issue without external context.
+
+### Fixing a bug listed in BUGS.md
+
+1. Implement the fix in the **notebook** (`nbs/` directory), not directly in the generated `.py` file under `fastai/`.
+2. Run `nbdev_export` to regenerate the library code from notebooks.
+3. Move the entry from **Open** to **Fixed**, appending a short description of the resolution after a dash (e.g., "- fixed by using `has_params(m)` instead of `hasattr(m, 'weight')`").
+4. Remove any stale `#TODO` comments in the source that reference the now-resolved issue.
+5. Include a test that fails before and passes after your fix.
+
+### Verifying a bug is already fixed
+
+Sometimes bugs are fixed incidentally by other changes but the entry remains under **Open**. Before opening a PR to update the list:
+
+1. Write a small script or test that would trigger the bug as described.
+2. If the bug no longer reproduces on the current `master` branch, move the entry to **Fixed** and note how it was resolved (or that it was resolved by an upstream change).
+3. If the entry references a `#TODO` comment in the code, remove or update that comment as part of your PR.

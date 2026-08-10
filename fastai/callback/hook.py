@@ -152,7 +152,7 @@ def layer_info(learn, *xb):
         params, trainable, shape = '', '', ''
         same = any((isinstance(x[0], torch.Tensor) and x[0].shape[1:] == x[1].shape for x in zip(i, o)))
         shape = apply(lambda x: x.shape, o)
-        if hasattr(m, 'weight'): # non activation layer
+        if has_params(m): # non activation layer
             params, trainable = total_params(m)
         return (type(m).__name__, params, trainable, shape, same)
             
@@ -176,9 +176,6 @@ def _print_shapes(o, bs):
 # %% ../../nbs/15_callback.hook.ipynb 67
 def module_summary(learn, *xb):
     "Print a summary of `model` using `xb`"
-    #Individual parameters wrapped in ParameterModule aren't called through the hooks in `layer_info`,
-    #  thus are not counted inside the summary
-    #TODO: find a way to have them counted in param number somehow
     infos = layer_info(learn, *xb)
     n,bs = 76,find_bs(xb)
     inp_sz = _print_shapes(apply(lambda x:x.shape, xb), bs)
