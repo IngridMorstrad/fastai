@@ -83,6 +83,27 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Reproducing CI Failures Locally
+
+If your pull request fails in CI, you can reproduce the failure on your local machine to iterate faster:
+
+1. **Check which workflow failed** - Click the red "X" on your PR to see the failed job name and step.
+2. **Run `nbdev_export` and `nbdev_test` locally** - Most CI failures come from notebooks being out of sync with library code:
+   ```bash
+   nbdev_export          # regenerate .py files from notebooks
+   nbdev_test --do_print # run all notebook tests, printing which ones execute
+   ```
+3. **Sync check** - The CI runs a sync check to ensure notebooks and source files match. If you edited a `.py` file directly, run `nbdev_update` to propagate changes back to notebooks, then verify with:
+   ```bash
+   nbdev_export
+   git diff              # should show no changes if everything is in sync
+   ```
+4. **Test a single notebook** - To save time when debugging, run a specific notebook's tests:
+   ```bash
+   nbdev_test --fname nbs/00_core.ipynb
+   ```
+5. **Environment mismatch** - If tests pass locally but fail in CI, compare your Python/PyTorch versions with those in `.github/workflows/`. You can use a virtual environment to match the CI configuration exactly.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
