@@ -54,6 +54,19 @@ Furthermore, you can run tests in parallel by launching [`nbdev_test`](https://n
 If you'd like to learn the nbdev commands available and more about the project, please visit [`the docs`](https://nbdev.fast.ai/getting_started.html#how-to-use-nbdev).
 
 
+## Reviewing Pull Requests
+
+Code review is one of the most valuable ways to contribute. Even if you are new to the project, a fresh pair of eyes often catches issues that the author missed. Here is how to review a PR effectively:
+
+1. **Pull the branch locally** and run `nbdev_test` to confirm the change does not break existing tests.
+2. **Check notebook/library sync** by running `nbdev_export` followed by `git diff` - there should be no untracked changes if the author exported correctly.
+3. **Read the diff with context** - look at surrounding code, not just the changed lines. Verify that variable names follow the [fastai abbreviation conventions](https://docs.fast.ai/dev/abbr.html).
+4. **Verify test coverage** - if the PR fixes a bug, ensure there is at least one test that would fail without the fix. If it adds a feature, check that edge cases are exercised.
+5. **Be constructive** - suggest concrete improvements rather than vague objections. Link to relevant docs or existing patterns in the codebase when proposing alternatives.
+6. **Scope check** - a good PR does one thing. If you see unrelated formatting changes or feature additions mixed in, ask the author to split them into separate PRs.
+
+Even approving comments like "Tested locally, all notebooks pass" help maintainers merge with confidence.
+
 ## PR submission guidelines
 
 * Keep each PR focused. While it's more convenient, do not combine several unrelated fixes together. Create as many branches as needing to keep each PR focused.
