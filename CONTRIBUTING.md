@@ -83,6 +83,69 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Development Environment Setup
+
+Follow these steps to set up a local development environment for contributing to fastai:
+
+1. **Fork and clone the repository**
+   ```bash
+   gh repo fork fastai/fastai --clone
+   cd fastai
+   ```
+
+2. **Create a dedicated conda environment** (recommended)
+   ```bash
+   conda create -n fastai-dev python=3.9
+   conda activate fastai-dev
+   ```
+
+3. **Install the library in editable mode with development dependencies**
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+4. **Install nbdev** (required for notebook-driven development)
+   ```bash
+   pip install nbdev
+   nbdev_install_hooks
+   ```
+   The hooks keep notebooks clean by stripping output metadata that causes merge conflicts.
+
+5. **Verify the installation**
+   ```bash
+   python -c "import fastai; print(fastai.__version__)"
+   nbdev_export   # confirm notebooks export cleanly
+   ```
+
+6. **Run the test suite**
+   ```bash
+   nbdev_test --do_print
+   ```
+   Tests run in parallel by default. Use `--n_workers 1` for sequential execution when debugging.
+
+7. **Rebuild documentation locally** (optional)
+   ```bash
+   nbdev_docs
+   ```
+
+### Useful development commands
+
+| Command | Purpose |
+|---------|---------|
+| `nbdev_export` | Export notebook cells tagged `#\|export` to library modules |
+| `nbdev_update` | Sync library changes back into notebooks |
+| `nbdev_test` | Run all notebook tests in parallel |
+| `nbdev_clean` | Strip notebook metadata (run before committing) |
+| `nbdev_docs` | Build the documentation site locally |
+
+### Working with GPU-dependent code
+
+Some tests and transforms require a CUDA-capable GPU. If you are developing on a CPU-only machine:
+
+- Mark GPU-specific tests with appropriate guards so they are skipped gracefully.
+- Use `default_device()` from `fastai.torch_core` rather than hard-coding `.cuda()` calls.
+- Run the full GPU test suite in a cloud environment (e.g., Colab, Paperspace) before submitting your PR.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
