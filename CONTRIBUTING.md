@@ -97,3 +97,47 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Shared Test Utilities and Mock Infrastructure
+
+When writing tests for fastai callback classes (or other modules with heavy dependency chains), use the shared mock helpers in `tests/` rather than duplicating boilerplate in each test file.
+
+### The `_tracker_mock` module
+
+The file `tests/_tracker_mock.py` provides a reusable mock environment for testing classes defined in `fastai/callback/tracker.py`. It handles:
+
+- Mocking `torch`, `fastai.basics`, `fastai.callback.progress`, and `fastai.callback.fp16`
+- Loading and executing the tracker source with internal imports replaced by stubs
+- Exposing a ready-to-use `tracker_module` object with all callback classes available
+
+**Usage:**
+
+```python
+from _tracker_mock import tracker_module, CancelFitException, FakeRecorder
+
+class TestMyCallback(unittest.TestCase):
+    def test_something(self):
+        cb = tracker_module.MyCallbackClass(monitor='valid_loss')
+        cb.recorder = FakeRecorder(['valid_loss'])
+        cb.before_fit()
+        # ... test logic ...
+```
+
+### Guidelines for test helper placement
+
+| Helper scope | Where to put it |
+|-------------|----------------|
+| Used by one test file only | Define it in that test file |
+| Used by 2+ test files for the same module | Create a `tests/_<module>_mock.py` helper |
+| General pytest fixtures (path setup, devices) | `tests/conftest.py` |
+
+### Adding new mock helpers
+
+If you need to test another module that has complex import dependencies:
+
+1. Create a new `tests/_<module_name>_mock.py` file following the pattern in `_tracker_mock.py`
+2. Keep the mock minimal: only stub what is needed for the specific classes under test
+3. Load and execute the real source so you test actual logic, not reimplementations
+4. Import the helper in your test file (the `tests/` directory is on `sys.path` via `conftest.py`)
+
+This approach keeps test files focused on assertions rather than infrastructure, and ensures that mock setup stays consistent when the underlying module changes.

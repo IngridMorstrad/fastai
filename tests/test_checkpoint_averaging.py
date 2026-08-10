@@ -1,113 +1,17 @@
 """Tests for CheckpointAveragingCallback.
 
 These tests mock the heavy fastai/torch dependencies so the callback logic
-can be validated without installing PyTorch.
+can be validated without installing PyTorch. Mock infrastructure is shared
+via tests/_tracker_mock.py.
 """
-
-import sys
-import types
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 import numpy as np
 
-
-# ----- Mock Setup -----
-# We need to mock the entire import chain so tracker.py can be imported
-# without torch or full fastai dependencies.
-
-class _CancelFitException(Exception):
-    pass
-
-
-# Create mock modules as proper module objects (not MagicMock)
-# so Python's import system treats them as real packages.
-def _make_module(name, attrs=None):
-    mod = types.ModuleType(name)
-    if attrs:
-        for k, v in attrs.items():
-            setattr(mod, k, v)
-    sys.modules[name] = mod
-    return mod
-
-
-# Mock torch and its submodules
-_make_module('torch', {'isinf': lambda x: False, 'isnan': lambda x: False})
-_make_module('torch.multiprocessing')
-_make_module('torch.nn')
-
-# Create the fastai package hierarchy
-fastai_pkg = _make_module('fastai')
-fastai_pkg.__path__ = []  # Mark as package
-
-# fastai.basics - provides Callback, np, CancelFitException, store_attr, etc.
-basics_mod = _make_module('fastai.basics', {
-    'np': np,
-    'Callback': type('Callback', (object,), {}),
-    'CancelFitException': _CancelFitException,
-    'store_attr': lambda *a, **kw: None,
-    'float': float,
-})
-
-# fastai.callback package
-callback_pkg = _make_module('fastai.callback')
-callback_pkg.__path__ = []  # Mark as package
-
-# fastai.callback.progress
-_make_module('fastai.callback.progress')
-
-# fastai.callback.fp16
-fp16_mod = _make_module('fastai.callback.fp16', {'MixedPrecision': type('MixedPrecision', (object,), {})})
-
-# Now we can import the actual tracker module
-# First, remove any cached version
-if 'fastai.callback.tracker' in sys.modules:
-    del sys.modules['fastai.callback.tracker']
-
-import os
-_tracker_path = os.path.join(os.path.dirname(__file__), '..', 'fastai', 'callback', 'tracker.py')
-_tracker_path = os.path.abspath(_tracker_path)
-
-# Create the tracker module
-tracker_module = types.ModuleType('fastai.callback.tracker')
-tracker_module.__file__ = _tracker_path
-tracker_module.__package__ = 'fastai.callback'
-
-# Populate namespace with what `from ..basics import *` would provide
-tracker_module.np = np
-tracker_module.Callback = basics_mod.Callback
-tracker_module.CancelFitException = _CancelFitException
-tracker_module.store_attr = lambda *a, **kw: None
-tracker_module.MixedPrecision = fp16_mod.MixedPrecision
-tracker_module.__builtins__ = __builtins__
-
-# Execute the tracker source, skipping the import lines
-with open(_tracker_path, 'r') as f:
-    source = f.read()
-
-# Remove the problematic import lines
-lines = source.split('\n')
-filtered_lines = []
-for line in lines:
-    # Skip import lines that pull from fastai internals
-    if line.startswith('from __future__'):
-        filtered_lines.append(line)
-    elif line.startswith('from ..') or line.startswith('from .'):
-        filtered_lines.append('pass  # skipped import')
-    else:
-        filtered_lines.append(line)
-
-exec(compile('\n'.join(filtered_lines), _tracker_path, 'exec'), tracker_module.__dict__)
-sys.modules['fastai.callback.tracker'] = tracker_module
+from _tracker_mock import tracker_module, CancelFitException, FakeRecorder
 
 
 # ----- Helpers -----
-
-class FakeRecorder:
-    """Mock recorder that simulates metric tracking."""
-    def __init__(self, metric_names, values=None):
-        self.metric_names = ['epoch'] + list(metric_names)
-        self.values = values if values is not None else []
-
 
 class FakeModel:
     """Mock model with state_dict and load_state_dict."""
@@ -200,14 +104,12 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb = self._setup_callback(cb, model_state={'w': np.array([1.0])})
         cb.before_fit()
 
-        # Simulate 5 epochs with decreasing then increasing loss
         losses = [0.5, 0.4, 0.3, 0.6, 0.7]
         for i, loss in enumerate(losses):
             cb.model._state_dict = {'w': np.array([float(i)])}
             cb.recorder.values.append([loss])
             cb.after_epoch()
 
-        # Should keep 3 best (lowest) losses: 0.3, 0.4, 0.5
         self.assertEqual(len(cb.top_k), 3)
         stored_losses = [score for score, _ in cb.top_k]
         self.assertAlmostEqual(stored_losses[0], 0.3)
@@ -220,7 +122,6 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb = self._setup_callback(cb, model_state={'w': np.array([1.0, 2.0])})
         cb.before_fit()
 
-        # 3 epochs with different weights and improving loss
         weights = [
             np.array([1.0, 4.0]),
             np.array([2.0, 5.0]),
@@ -232,10 +133,8 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
             cb.recorder.values.append([loss])
             cb.after_epoch()
 
-        # Now call after_fit to average
         cb.after_fit()
 
-        # Expected average: [2.0, 5.0]
         expected = np.array([2.0, 5.0])
         np.testing.assert_array_almost_equal(cb.model._state_dict['w'], expected)
 
@@ -245,7 +144,6 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb = self._setup_callback(cb, model_state={'w': np.array([1.0])})
         cb.before_fit()
 
-        # Only 2 epochs
         weights = [np.array([2.0]), np.array([4.0])]
         losses = [0.5, 0.3]
         for w, loss in zip(weights, losses):
@@ -256,7 +154,6 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         self.assertEqual(len(cb.top_k), 2)
         cb.after_fit()
 
-        # Average of [2.0] and [4.0] = [3.0]
         expected = np.array([3.0])
         np.testing.assert_array_almost_equal(cb.model._state_dict['w'], expected)
 
@@ -266,7 +163,6 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb = self._setup_callback(cb, model_state={'w': np.array([1.0])})
         cb.before_fit()
 
-        # One epoch to populate top_k
         cb.model._state_dict = {'w': np.array([2.0])}
         cb.recorder.values.append([0.5])
         cb.after_epoch()
@@ -293,20 +189,17 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb = self._setup_callback(cb, model_state={'w': np.array([0.0])})
         cb.before_fit()
 
-        # 5 epochs all improving (loss going down)
         losses = [0.5, 0.4, 0.3, 0.2, 0.1]
         for i, loss in enumerate(losses):
             cb.model._state_dict = {'w': np.array([float(i + 1)])}
             cb.recorder.values.append([loss])
             cb.after_epoch()
 
-        # Only k=2 best (lowest loss): 0.1 and 0.2
         self.assertEqual(len(cb.top_k), 2)
         stored_losses = sorted([score for score, _ in cb.top_k])
         self.assertAlmostEqual(stored_losses[0], 0.1)
         self.assertAlmostEqual(stored_losses[1], 0.2)
 
-        # Weights corresponding to loss 0.1 are [5.0], loss 0.2 are [4.0]
         cb.after_fit()
         expected = np.array([4.5])  # (5.0 + 4.0) / 2
         np.testing.assert_array_almost_equal(cb.model._state_dict['w'], expected)
@@ -317,14 +210,12 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb = self._setup_callback(cb, metric_names=['accuracy'], model_state={'w': np.array([0.0])})
         cb.before_fit()
 
-        # 5 epochs with varying accuracy
         accuracies = [0.7, 0.8, 0.75, 0.9, 0.85]
         for i, acc in enumerate(accuracies):
             cb.model._state_dict = {'w': np.array([float(i + 1)])}
             cb.recorder.values.append([acc])
             cb.after_epoch()
 
-        # Top-3 highest accuracy: 0.9 (w=4), 0.85 (w=5), 0.8 (w=2)
         self.assertEqual(len(cb.top_k), 3)
         stored_accs = sorted([score for score, _ in cb.top_k], reverse=True)
         self.assertAlmostEqual(stored_accs[0], 0.9)
@@ -332,7 +223,6 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         self.assertAlmostEqual(stored_accs[2], 0.8)
 
         cb.after_fit()
-        # Average of weights: (4 + 5 + 2) / 3 = 3.666...
         expected = np.array([11.0 / 3.0])
         np.testing.assert_array_almost_equal(cb.model._state_dict['w'], expected)
 
@@ -341,9 +231,7 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb = self._create_callback(k=3)
         cb = self._setup_callback(cb, model_state={'w': np.array([42.0])})
         cb.before_fit()
-        # No epochs - call after_fit directly
         cb.after_fit()
-        # Model should be unchanged
         np.testing.assert_array_almost_equal(cb.model._state_dict['w'], np.array([42.0]))
 
     def test_multiple_keys_in_state_dict(self):
@@ -353,19 +241,16 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb = self._setup_callback(cb, model_state=initial_state)
         cb.before_fit()
 
-        # Epoch 1
         cb.model._state_dict = {'layer1.weight': np.array([2.0, 4.0]), 'layer1.bias': np.array([1.0])}
         cb.recorder.values.append([0.3])
         cb.after_epoch()
 
-        # Epoch 2
         cb.model._state_dict = {'layer1.weight': np.array([4.0, 6.0]), 'layer1.bias': np.array([2.0])}
         cb.recorder.values.append([0.2])
         cb.after_epoch()
 
         cb.after_fit()
 
-        # Average: weight = (2+4)/2 = [3,5], bias = (1+2)/2 = [1.5]
         np.testing.assert_array_almost_equal(cb.model._state_dict['layer1.weight'], np.array([3.0, 5.0]))
         np.testing.assert_array_almost_equal(cb.model._state_dict['layer1.bias'], np.array([1.5]))
 
@@ -379,15 +264,12 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb = self._setup_callback(cb, model_state={'w': np.array([1.0])})
         cb.before_fit()
 
-        # Simulate lr_find by setting self.run = False
         cb.run = False
 
-        # Simulate epochs
         cb.model._state_dict = {'w': np.array([99.0])}
         cb.recorder.values.append([0.1])
         cb.after_epoch()
 
-        # top_k should remain empty since run is False
         self.assertEqual(len(cb.top_k), 0)
 
     def test_integer_buffer_not_averaged(self):
@@ -400,7 +282,6 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb = self._setup_callback(cb, model_state=initial_state)
         cb.before_fit()
 
-        # Epoch 1 - best (lowest loss)
         cb.model._state_dict = {
             'weight': np.array([2.0, 4.0]),
             'num_batches_tracked': np.array([200], dtype=np.int64)
@@ -408,7 +289,6 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb.recorder.values.append([0.2])
         cb.after_epoch()
 
-        # Epoch 2 - second best
         cb.model._state_dict = {
             'weight': np.array([4.0, 6.0]),
             'num_batches_tracked': np.array([300], dtype=np.int64)
@@ -418,9 +298,7 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
 
         cb.after_fit()
 
-        # Float weight should be averaged: (2+4)/2 = 3, (4+6)/2 = 5
         np.testing.assert_array_almost_equal(cb.model._state_dict['weight'], np.array([3.0, 5.0]))
-        # Integer buffer should be from best checkpoint (loss=0.2), NOT averaged
         np.testing.assert_array_equal(cb.model._state_dict['num_batches_tracked'], np.array([200]))
 
     def test_memory_warning_printed(self):
