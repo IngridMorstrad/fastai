@@ -8,17 +8,20 @@ For discussions about features before implementation, please use the [fastai for
 
 - Add built-in support for streaming/iterable datasets that do not fit in memory (e.g. webdataset or HuggingFace IterableDataset integration)
 - Add support for automatic dataset versioning and lineage tracking so users can reproduce experiments by referencing a specific data snapshot
+- Add multi-modal DataLoaders that allow combining image, text, and tabular inputs into a single batch for joint training of multi-modal architectures
 
 ## Training
 
 - Support learning rate finder (`lr_find`) with multiple losses displayed on the same plot for multi-task models
 - Support automatic mixed-precision gradient scaling configuration per parameter group to allow selective full-precision training of sensitive layers (e.g. batch norm)
 - [DONE] Add a checkpoint averaging callback that maintains the top-K model checkpoints by validation loss and produces a weight-averaged model at the end of training for improved generalization -- implemented as `CheckpointAveragingCallback`
+- Add a `Learner.to_distributed()` method that wraps the model for multi-GPU distributed data-parallel training with a single-line API and automatic rank/world-size configuration
 
 ## Vision
 
 - Add native support for ONNX model export with dynamic batch-size axes directly from `Learner`
 - [DONE] Add built-in GradCAM/Grad-CAM++ visualization support to highlight class-discriminative regions in image predictions -- implemented in `fastai.vision.gradcam`
+- Add configurable test-time augmentation (TTA) with user-defined augmentation policies and reduction strategies (mean, median, voting) for improved prediction robustness
 
 ## Text
 
@@ -32,6 +35,7 @@ For discussions about features before implementation, please use the [fastai for
 
 - [DONE] Add a built-in EarlyStopping callback that supports monitoring multiple metrics with configurable logic (any/all) -- implemented as `MultiMetricEarlyStoppingCallback`
 - Add a built-in GPU memory profiling callback that logs peak GPU memory usage per training step to help users diagnose OOM issues
+- Add a learning rate warmup callback that linearly or exponentially ramps the learning rate from zero over a configurable number of steps before handing off to the main scheduler
 
 ## Deployment & Export
 
@@ -42,3 +46,4 @@ For discussions about features before implementation, please use the [fastai for
 
 - Add a CLI command (`fastai_check_env`) that validates GPU drivers, CUDA version, and dependency compatibility in one step
 - Provide a `Learner.export_logs()` method that writes training metrics to structured JSON/CSV files compatible with TensorBoard, Weights & Biases, and other visualization tools
+- Add a `Learner.summary()` method that displays model architecture, parameter counts per layer, and intermediate output shapes similar to torchinfo/torchsummary
