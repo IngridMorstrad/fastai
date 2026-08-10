@@ -97,3 +97,61 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Understanding and Writing Callbacks
+
+fastai's training loop is driven by an event system where `Callback` subclasses hook into specific moments of training. Understanding this system is essential for most non-trivial contributions.
+
+### How the event system works
+
+The `Learner` fires named events (e.g. `after_batch`, `after_epoch`, `after_loss`) at well-defined points during `fit()`. Any callback that defines a method matching an event name is invoked automatically. Events are dispatched in the order callbacks appear in `Learner.cbs`, and a callback can short-circuit the rest by raising `CancelBatchException`, `CancelEpochException`, or `CancelFitException`.
+
+### Key events (in training-loop order)
+
+| Event | When it fires |
+|-------|--------------|
+| `before_fit` | Once at the start of `fit()` |
+| `before_epoch` | Before each epoch |
+| `before_train` / `before_validate` | Before the training / validation phase |
+| `before_batch` | Before each batch is processed |
+| `after_pred` | After the forward pass produces predictions |
+| `after_loss` | After loss is computed |
+| `before_backward` | Just before `loss.backward()` |
+| `after_backward` | After gradients are computed |
+| `after_step` | After the optimizer step |
+| `after_batch` | After the full batch cycle completes |
+| `after_train` / `after_validate` | After the training / validation phase |
+| `after_epoch` | After each epoch |
+| `after_fit` | Once at the very end of `fit()` |
+
+### Writing a new callback
+
+1. Subclass `Callback` and define methods named after the events you need.
+2. Use `self.learn` (or shorthand attributes like `self.pred`, `self.loss`, `self.opt`) to read or modify training state.
+3. Set the `order` class attribute to control priority relative to other callbacks (lower runs first; default is 0).
+4. Keep callbacks stateless between fits: initialize per-fit state in `before_fit` and clean up in `after_fit`.
+
+Example skeleton:
+
+```python
+class MyCallback(Callback):
+    order = 5  # run after most built-in callbacks
+
+    def before_fit(self):
+        self.total_loss = 0.0
+
+    def after_batch(self):
+        if self.training:
+            self.total_loss += self.loss.item()
+
+    def after_epoch(self):
+        print(f"Cumulative train loss: {self.total_loss:.4f}")
+        self.total_loss = 0.0
+```
+
+### Tips for callback contributors
+
+- Look at `fastai/callback/core.py` for the base `Callback` class and the full event list.
+- Study existing callbacks in `fastai/callback/` (e.g. `progress.py`, `tracker.py`, `schedule.py`) for real-world patterns.
+- Always include a test that creates a `Learner` with synthetic data, attaches your callback, and verifies the expected behavior after `fit()`.
+- Avoid storing large tensors on `self` across batches to prevent memory leaks; detach and move to CPU or log scalars instead.
