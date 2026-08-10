@@ -5,6 +5,8 @@ import pytest
 
 # Ensure the fastai package is importable from the repo root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# Ensure sibling test modules (e.g. tracker_test_utils) are importable by bare name
+sys.path.insert(0, os.path.dirname(__file__))
 
 
 @pytest.fixture

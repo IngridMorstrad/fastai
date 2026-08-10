@@ -6,7 +6,7 @@ Last verified: 2026-08-07
 
 ## Summary
 
-- **Total lines**: 25683
+- **Total lines**: 25685
 - **Dead code removed this round**: 7 unused imports removed, ~100 duplicated lines of mock infrastructure extracted into shared module
 - **Other fixes applied**: replaced deprecated `pkg_resources` with `packaging.version` in setup.py
 
@@ -126,7 +126,7 @@ Last verified: 2026-08-07
      43 ./nbs/examples/train_tabular.py
      46 ./nbs/examples/train_wt2.py
      63 ./setup.py
-     14 ./tests/conftest.py
+     16 ./tests/conftest.py
       0 ./tests/__init__.py
     346 ./tests/test_checkpoint_averaging.py
     370 ./tests/test_collab.py
@@ -144,5 +144,5 @@ Last verified: 2026-08-07
     574 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     119 ./tests/tracker_test_utils.py
-  25683 total
+  25685 total
 ```
