@@ -3,6 +3,62 @@
 First, thanks a lot for wanting to help! Make sure you have read the [doc on code style](
 https://docs.fast.ai/dev/style.html) first. (Note that we don't follow PEP8, but instead follow a coding style designed specifically for numerical and interactive programming.) For help running and building the code, see the [developers guide](https://docs.fast.ai/dev/develop.html).
 
+## Quick Start / Development Setup
+
+Follow these steps to get a local development environment running:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/IngridMorstrad/fastai.git
+cd fastai
+
+# 2. Create and activate a virtual environment (Python 3.7+ required)
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# 3. Install the library in editable mode with development dependencies
+pip install -e ".[dev]"
+
+# 4. Install nbdev and set up git hooks (cleans notebook metadata on commit)
+pip install nbdev
+nbdev_install_hooks
+
+# 5. Verify installation
+python -c "import fastai; print(fastai.__version__)"
+```
+
+## Running CI Locally
+
+The GitHub Actions workflow (`.github/workflows/main.yml`) checks that notebooks and library source stay in sync. You can replicate this locally:
+
+```bash
+# Export notebook cells to .py modules
+nbdev_export
+
+# Check nothing is out of sync (should produce no git diff)
+git diff --exit-code
+
+# Run the full test suite in parallel
+nbdev_test
+
+# Run tests for a single notebook
+nbdev_test --fname nbs/00_torch_core.ipynb
+```
+
+If `nbdev_export` produces changes, it means a notebook was edited without re-exporting. Commit those generated files alongside your notebook changes.
+
+## Project Structure
+
+| Path | Description |
+|------|-------------|
+| `nbs/` | Source of truth. Jupyter notebooks that contain documentation, code, and tests. Library code is exported from here via nbdev. |
+| `fastai/` | Auto-generated Python package produced by `nbdev_export`. Do not edit directly; make changes in the corresponding notebook instead. |
+| `fastai/callback/` | Training callbacks (e.g., progress logging, mixed precision, TensorBoard, W&B). |
+| `fastai/data/` | Data loading, transforms, and `DataLoaders` pipeline. |
+| `fastai/vision/`, `fastai/text/`, `fastai/tabular/`, `fastai/medical/` | Domain-specific modules built on top of the core training loop. |
+| `.github/workflows/` | CI configuration (notebook sync checks). |
+| `settings.ini` | nbdev project settings (version, requirements, metadata). |
+
 ## Note for new contributors from Jeremy
 
 It can be tempting to jump into a new project by questioning the stylistic decisions that have been made, such as naming, formatting, and so forth. This can be especially so for python programmers contributing to this project, which is unusual in following a number of conventions that are common in other programming communities, but not in Python. However, please don’t do this, for (amongst others) the following reasons:
