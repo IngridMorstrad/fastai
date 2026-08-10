@@ -6,8 +6,8 @@ Last verified: 2026-08-07
 
 ## Summary
 
-- **Total lines**: 21041
-- **Dead code removed**: 13 lines (unused imports and one dead function)
+- **Total lines**: 25685
+- **Dead code removed this round**: 7 unused imports removed, ~100 duplicated lines of mock infrastructure extracted into shared module
 - **Other fixes applied**: replaced deprecated `pkg_resources` with `packaging.version` in setup.py
 
 ## Dead Code Removed
@@ -23,6 +23,14 @@ Last verified: 2026-08-07
 | `fastai/callback/captum.py` | Unused import `tempfile` |
 | `fastai/distributed.py` | Unused imports `_loaders` and `OptimWrapper` |
 | `fastai/vision/augment.py` | Unused import `Bernoulli` from `torch.distributions.bernoulli` |
+| `tests/test_losses.py` | Unused `import pytest` |
+| `tests/test_layers.py` | Unused `import pytest` |
+| `tests/test_metrics.py` | Unused `import pytest` |
+| `tests/test_optimizer.py` | Unused `import math` |
+| `tests/test_torch_core.py` | Unused `import pytest` |
+| `tests/test_text_core.py` | Unused `import types` |
+| `tests/test_checkpoint_averaging.py` | Unused `patch` from `unittest.mock`; duplicated mock infrastructure extracted to `tests/tracker_test_utils.py` |
+| `tests/test_multi_metric_early_stopping.py` | Duplicated mock infrastructure extracted to `tests/tracker_test_utils.py` |
 
 ## Full Line Count (wc -l)
 
@@ -42,8 +50,8 @@ Last verified: 2026-08-07
     126 ./fastai/callback/progress.py
      44 ./fastai/callback/rnn.py
     299 ./fastai/callback/schedule.py
-    172 ./fastai/callback/tensorboard.py
-    209 ./fastai/callback/tracker.py
+    167 ./fastai/callback/tensorboard.py
+    279 ./fastai/callback/tracker.py
      59 ./fastai/callback/training.py
     324 ./fastai/callback/wandb.py
     104 ./fastai/collab.py
@@ -61,7 +69,7 @@ Last verified: 2026-08-07
       2 ./fastai/__init__.py
     174 ./fastai/interpret.py
     660 ./fastai/layers.py
-    687 ./fastai/learner.py
+    682 ./fastai/learner.py
     281 ./fastai/losses.py
     412 ./fastai/medical/imaging.py
       0 ./fastai/medical/__init__.py
@@ -75,7 +83,7 @@ Last verified: 2026-08-07
       0 ./fastai/tabular/__init__.py
      56 ./fastai/tabular/learner.py
      81 ./fastai/tabular/model.py
-    168 ./fastai/test_utils.py
+    165 ./fastai/test_utils.py
       6 ./fastai/text/all.py
     381 ./fastai/text/core.py
     290 ./fastai/text/data.py
@@ -92,6 +100,7 @@ Last verified: 2026-08-07
     309 ./fastai/vision/core.py
     221 ./fastai/vision/data.py
     406 ./fastai/vision/gan.py
+    231 ./fastai/vision/gradcam.py
       1 ./fastai/vision/__init__.py
     362 ./fastai/vision/learner.py
       3 ./fastai/vision/models/all.py
@@ -117,14 +126,23 @@ Last verified: 2026-08-07
      43 ./nbs/examples/train_tabular.py
      46 ./nbs/examples/train_wt2.py
      63 ./setup.py
-     14 ./tests/conftest.py
+     16 ./tests/conftest.py
       0 ./tests/__init__.py
-    477 ./tests/test_layers.py
+    346 ./tests/test_checkpoint_averaging.py
+    370 ./tests/test_collab.py
+    640 ./tests/test_data_loader.py
+    700 ./tests/test_dataloader.py
+    720 ./tests/test_data_load.py
+    699 ./tests/test_data_transforms.py
+    296 ./tests/test_gradcam.py
+    476 ./tests/test_layers.py
     146 ./tests/test_lm_dataloader.py
-    337 ./tests/test_losses.py
-   1293 ./tests/test_metrics.py
-    353 ./tests/test_multi_metric_early_stopping.py
-    773 ./tests/test_optimizer.py
-    528 ./tests/test_torch_core.py
-  21041 total
+    336 ./tests/test_losses.py
+   1292 ./tests/test_metrics.py
+    248 ./tests/test_multi_metric_early_stopping.py
+    772 ./tests/test_optimizer.py
+    574 ./tests/test_text_core.py
+    527 ./tests/test_torch_core.py
+    119 ./tests/tracker_test_utils.py
+  25685 total
 ```
