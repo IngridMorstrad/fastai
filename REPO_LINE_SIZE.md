@@ -6,10 +6,15 @@ Last verified: 2026-08-07
 
 ## Summary
 
-- **Total lines**: 25749
-- **Dead code removed this round**: 37 lines (duplicate import, deprecated Variable usage, dead functions, duplicate method, redundant overrides)
+- **Total lines**: 25747
+- **Dead code removed this round**: 39 lines (duplicate import, deprecated Variable usage, dead functions, duplicate method, redundant overrides, commented-out dead code in tensor())
 - **Previous dead code removed**: 13 lines (unused imports and one dead function)
 - **Other fixes applied**: replaced deprecated `pkg_resources` with `packaging.version` in setup.py
+
+> **Note on total line count**: The total increased from 21041 (first audit) to 25747 due to
+> test files and other source files added by separate PRs (e.g. test_checkpoint_averaging.py,
+> test_collab.py, test_data_loader.py, vision/gradcam.py). The dead-code-removal changes in
+> this PR reduced lines by 39; the net increase is entirely from unrelated additions.
 
 ## Dead Code Removed
 
@@ -20,6 +25,7 @@ Last verified: 2026-08-07
 | `nbs/00_torch_core.ipynb` / `fastai/torch_core.py` | Dead functions `_fa_rebuild_tensor` and `_fa_rebuild_qtensor` (defined but never called) |
 | `nbs/00_torch_core.ipynb` / `fastai/torch_core.py` | First duplicate `new_empty` method in TensorBase (Python only keeps last definition) |
 | `nbs/00_torch_core.ipynb` / `fastai/torch_core.py` | Redundant `show` overrides and `_show_args` re-declarations in TitledInt, TitledFloat, TitledStr, TitledTuple (identical to inherited ShowTitle) |
+| `nbs/00_torch_core.ipynb` / `fastai/torch_core.py` | Commented-out dead code in `tensor()` function (empty-list check and alternative `as_tensor` path) |
 | `fastai/imports.py` | Dead function `is_coll` (defined but never called anywhere) |
 | `fastai/layers.py` | Unused import `uniform_` from `torch.nn.init` |
 | `fastai/callback/tensorboard.py` | Unused imports `tensorboard` and `ModelToHalf` |
@@ -91,7 +97,7 @@ Last verified: 2026-08-07
     173 ./fastai/text/models/core.py
       1 ./fastai/text/models/__init__.py
      13 ./fastai/torch_basics.py
-    885 ./fastai/torch_core.py
+    883 ./fastai/torch_core.py
       9 ./fastai/torch_imports.py
       9 ./fastai/vision/all.py
    1266 ./fastai/vision/augment.py
@@ -141,5 +147,5 @@ Last verified: 2026-08-07
     773 ./tests/test_optimizer.py
     575 ./tests/test_text_core.py
     528 ./tests/test_torch_core.py
-  25749 total
+  25747 total
 ```
