@@ -8,6 +8,7 @@ For discussions about features before implementation, please use the [fastai for
 
 - Add built-in support for streaming/iterable datasets that do not fit in memory (e.g. webdataset or HuggingFace IterableDataset integration)
 - Add support for automatic dataset versioning and lineage tracking so users can reproduce experiments by referencing a specific data snapshot
+- Add a `DataLoaders.cross_validate(k=5)` method that returns an iterator of train/validation DataLoader splits for k-fold cross-validation without requiring manual index management
 
 ## Training
 
@@ -19,10 +20,12 @@ For discussions about features before implementation, please use the [fastai for
 
 - Add native support for ONNX model export with dynamic batch-size axes directly from `Learner`
 - [DONE] Add built-in GradCAM/Grad-CAM++ visualization support to highlight class-discriminative regions in image predictions -- implemented in `fastai.vision.gradcam`
+- Add support for model ensembling at prediction time via a `VisionEnsemble` class that combines predictions from multiple trained Learners using configurable strategies (averaging, stacking, majority vote)
 
 ## Text
 
 - Provide a high-level API for parameter-efficient fine-tuning (LoRA/QLoRA adapters) on large language models
+- Add a `TextLearner.explain(text)` method that highlights token-level attribution scores (e.g. integrated gradients or attention rollout) to show which input tokens most influenced the prediction
 
 ## Tabular
 
@@ -32,11 +35,13 @@ For discussions about features before implementation, please use the [fastai for
 
 - [DONE] Add a built-in EarlyStopping callback that supports monitoring multiple metrics with configurable logic (any/all) -- implemented as `MultiMetricEarlyStoppingCallback`
 - Add a built-in GPU memory profiling callback that logs peak GPU memory usage per training step to help users diagnose OOM issues
+- Add a `GradientNoiseInjection` callback that adds decaying Gaussian noise to gradients during training to improve generalization and escape sharp minima, following the schedule from Neelakantan et al. 2015
 
 ## Deployment & Export
 
 - Provide a `Learner.to_api()` convenience method that generates a minimal FastAPI/Flask prediction endpoint from a trained model
 - Add a `Learner.benchmark()` method that profiles inference latency, throughput, and memory usage across configurable batch sizes to help users choose optimal deployment settings
+- Add a `Learner.quantize()` method that applies post-training quantization (dynamic or static) with automatic calibration and accuracy validation against the full-precision model
 
 ## Documentation & Tooling
 
