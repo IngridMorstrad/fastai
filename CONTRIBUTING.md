@@ -97,3 +97,59 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Writing Good Commit Messages
+
+Clear commit messages help reviewers understand your changes and make `git log` useful for future contributors. Follow these conventions when contributing to fastai:
+
+### Format
+
+```
+<type>: <short summary in imperative mood>
+
+<optional body explaining *why*, not *what*>
+```
+
+The **subject line** should be 72 characters or fewer. Use imperative mood ("add support for..." not "added support for..."). Do not end with a period.
+
+### Type Prefixes
+
+| Prefix | Use for |
+|--------|---------|
+| `feat:` | New feature or user-facing capability |
+| `fix:` | Bug fix (reference the issue number if one exists) |
+| `docs:` | Documentation-only changes (notebooks, docstrings, markdown) |
+| `refactor:` | Code restructuring with no behavior change |
+| `test:` | Adding or updating tests only |
+| `chore:` | Build scripts, CI config, dependency bumps |
+| `perf:` | Performance improvement with no API change |
+
+### Body Guidelines
+
+- Wrap lines at 72 characters.
+- Explain the motivation or context when the subject line alone is not enough.
+- If the commit fixes an open GitHub issue, include `Fixes #<number>` on its own line so the issue auto-closes when merged.
+- For notebook changes, mention which notebook was edited so reviewers can jump straight to it.
+
+### Examples
+
+```
+feat: add gradient noise injection callback
+
+Implements Neelakantan et al. 2015 schedule for decaying Gaussian
+noise added to gradients during training. Helps regularize large
+models on small datasets.
+
+Fixes #42
+```
+
+```
+fix: handle empty validation set in ShowGraphCallback
+
+ShowGraphCallback.after_epoch assumed rec.values always had at least
+two entries. Guard against IndexError when validation is skipped.
+```
+
+```
+docs: add example usage for TabularPandas normalize
+```
