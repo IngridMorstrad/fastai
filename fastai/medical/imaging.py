@@ -8,7 +8,7 @@ from ..basics import *
 from ..vision.all import *
 from ..data.transforms import *
 
-import pydicom,kornia
+import pydicom,kornia,skimage
 from pydicom.dataset import Dataset as DcmDataset
 from pydicom.tag import BaseTag as DcmTag
 from pydicom.multival import MultiValue as DcmMultiValue
