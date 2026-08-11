@@ -97,3 +97,87 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Running Tests Locally
+
+The test suite lives in the `tests/` directory and uses `pytest`. Here is how to run tests effectively during development:
+
+### Quick start
+
+```bash
+# Run all tests
+python -m pytest tests/
+
+# Run a specific test file
+python -m pytest tests/test_layers.py
+
+# Run a specific test class or function
+python -m pytest tests/test_layers.py::TestInitDefault
+python -m pytest tests/test_layers.py::TestInitDefault::test_init_default_zeros_bias
+
+# Stop on first failure (useful during development)
+python -m pytest tests/ -x
+
+# Show verbose output with individual test names
+python -m pytest tests/ -v
+```
+
+### Test organization
+
+Tests are organized by module. Each test file corresponds to a source module:
+
+| Test file | Tests for |
+|-----------|-----------|
+| `tests/test_torch_core.py` | `fastai/torch_core.py` - tensor utilities, type system |
+| `tests/test_layers.py` | `fastai/layers.py` - custom nn.Module layers |
+| `tests/test_losses.py` | `fastai/losses.py` - loss functions |
+| `tests/test_optimizer.py` | `fastai/optimizer.py` - optimizer implementations |
+| `tests/test_metrics.py` | `fastai/metrics.py` - training metrics |
+| `tests/test_data_load.py` | `fastai/data/load.py` - DataLoader |
+| `tests/test_gradcam.py` | `fastai/vision/gradcam.py` - GradCAM visualization |
+
+### Dependencies for tests
+
+Some tests require optional dependencies. If a test file fails to collect with an `ImportError`, install the missing package:
+
+```bash
+# Core test dependencies
+pip install pytest
+
+# For text tests
+pip install spacy
+
+# For distributed tests
+pip install accelerate
+```
+
+Tests that require a GPU are skipped automatically when no CUDA device is available. You can run the full CPU-compatible suite without a GPU.
+
+### Writing new tests
+
+When adding tests for a new module or function:
+
+1. Create a test file named `tests/test_<module>.py`
+2. Import the functions under test directly (use `sys.path.insert` if needed for isolation)
+3. Use plain `assert` statements or `torch.testing.assert_close` for tensor comparisons
+4. Group related tests in a class (e.g., `class TestMyFunction:`)
+5. Each test method should test one behavior and have a descriptive name
+
+Example:
+
+```python
+import torch
+from fastai.layers import sigmoid_range
+
+class TestSigmoidRange:
+    def test_output_within_range(self):
+        x = torch.randn(100)
+        result = sigmoid_range(x, low=-1, high=1)
+        assert result.min() >= -1
+        assert result.max() <= 1
+
+    def test_midpoint(self):
+        x = torch.zeros(1)
+        result = sigmoid_range(x, low=0, high=10)
+        assert abs(result.item() - 5.0) < 0.01
+```

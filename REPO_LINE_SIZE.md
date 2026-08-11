@@ -6,14 +6,18 @@ Last verified: 2026-08-07
 
 ## Summary
 
-- **Total lines**: 21041
-- **Dead code removed**: 13 lines (unused imports and one dead function)
+- **Total lines**: 25721
+- **Dead code removed this session**: 49 lines (1 dead module, 7 unused imports across 2 files)
+- **Previous dead code removed**: 13 lines (unused imports and one dead function)
 - **Other fixes applied**: replaced deprecated `pkg_resources` with `packaging.version` in setup.py
 
 ## Dead Code Removed
 
 | File | Removed |
 |------|---------|
+| `fastai/_pytorch_doc.py` | Entire dead module (46 lines) - never imported by any library code |
+| `fastai/torch_imports.py` | Unused imports: `pandas as pd` (duplicate of imports.py), `ByteTensor`, `HalfTensor`, `DoubleTensor`, `SequentialSampler`, `Sampler`, `BatchSampler`, `RandomSampler` |
+| `fastai/fp16_utils.py` | Unused import `torch.nn as nn` (code uses fully-qualified `torch.nn.` paths) |
 | `fastai/imports.py` | Dead function `is_coll` (defined but never called anywhere) |
 | `fastai/layers.py` | Unused import `uniform_` from `torch.nn.init` |
 | `fastai/callback/tensorboard.py` | Unused imports `tensorboard` and `ModelToHalf` |
@@ -42,8 +46,8 @@ Last verified: 2026-08-07
     126 ./fastai/callback/progress.py
      44 ./fastai/callback/rnn.py
     299 ./fastai/callback/schedule.py
-    172 ./fastai/callback/tensorboard.py
-    209 ./fastai/callback/tracker.py
+    167 ./fastai/callback/tensorboard.py
+    279 ./fastai/callback/tracker.py
      59 ./fastai/callback/training.py
     324 ./fastai/callback/wandb.py
     104 ./fastai/collab.py
@@ -56,26 +60,25 @@ Last verified: 2026-08-07
     215 ./fastai/data/load.py
     384 ./fastai/data/transforms.py
     224 ./fastai/distributed.py
-     73 ./fastai/fp16_utils.py
+     72 ./fastai/fp16_utils.py
      85 ./fastai/imports.py
       2 ./fastai/__init__.py
     174 ./fastai/interpret.py
     660 ./fastai/layers.py
-    687 ./fastai/learner.py
+    682 ./fastai/learner.py
     281 ./fastai/losses.py
     412 ./fastai/medical/imaging.py
       0 ./fastai/medical/__init__.py
     473 ./fastai/metrics.py
    2682 ./fastai/_modidx.py
     497 ./fastai/optimizer.py
-     46 ./fastai/_pytorch_doc.py
       6 ./fastai/tabular/all.py
     404 ./fastai/tabular/core.py
      60 ./fastai/tabular/data.py
       0 ./fastai/tabular/__init__.py
      56 ./fastai/tabular/learner.py
      81 ./fastai/tabular/model.py
-    168 ./fastai/test_utils.py
+    165 ./fastai/test_utils.py
       6 ./fastai/text/all.py
     381 ./fastai/text/core.py
     290 ./fastai/text/data.py
@@ -86,12 +89,13 @@ Last verified: 2026-08-07
       1 ./fastai/text/models/__init__.py
      13 ./fastai/torch_basics.py
     903 ./fastai/torch_core.py
-      9 ./fastai/torch_imports.py
+      7 ./fastai/torch_imports.py
       9 ./fastai/vision/all.py
    1266 ./fastai/vision/augment.py
     309 ./fastai/vision/core.py
     221 ./fastai/vision/data.py
     406 ./fastai/vision/gan.py
+    231 ./fastai/vision/gradcam.py
       1 ./fastai/vision/__init__.py
     362 ./fastai/vision/learner.py
       3 ./fastai/vision/models/all.py
@@ -119,12 +123,20 @@ Last verified: 2026-08-07
      63 ./setup.py
      14 ./tests/conftest.py
       0 ./tests/__init__.py
+    441 ./tests/test_checkpoint_averaging.py
+    370 ./tests/test_collab.py
+    640 ./tests/test_data_loader.py
+    700 ./tests/test_dataloader.py
+    720 ./tests/test_data_load.py
+    699 ./tests/test_data_transforms.py
+    296 ./tests/test_gradcam.py
     477 ./tests/test_layers.py
     146 ./tests/test_lm_dataloader.py
     337 ./tests/test_losses.py
    1293 ./tests/test_metrics.py
     353 ./tests/test_multi_metric_early_stopping.py
     773 ./tests/test_optimizer.py
+    575 ./tests/test_text_core.py
     528 ./tests/test_torch_core.py
-  21041 total
+  25721 total
 ```
