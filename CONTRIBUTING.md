@@ -42,6 +42,23 @@ Here are some ways that you can learn a lot about the library, whilst also contr
 * Once your approach has been discussed and confirmed on the forum, you are welcome to push a PR, including a complete description of the new feature and an example of how it's used. Be sure to document your code and read the [doc on code style](https://docs.fast.ai/dev/style.html) and [the one on abbreviations](https://docs.fast.ai/dev/abbr.html).
 * Ensure that your PR includes tests that exercise not only your feature, but also any other code that might be impacted. Currently we have poor test coverage of existing features, so often you'll need to add tests of existing code. Your help here is much appreciated!
 
+### Feature request categorization
+
+When adding or editing entries in `FEATURE_REQUESTS.md`, place each feature in the section that best matches its **primary domain**:
+
+| Section | What belongs here |
+|---------|-------------------|
+| Data | Dataset loading, preprocessing, augmentation pipelines, data versioning |
+| Training | Training loop mechanics, optimizers, schedulers, mixed-precision, checkpointing |
+| Vision | Image-specific models, transforms, and visualization tools |
+| Text | NLP-specific models, tokenizers, and language model utilities |
+| Tabular | Tabular-specific models, feature engineering, and categorical handling |
+| Callbacks | General-purpose callbacks that work across domains (logging, early stopping, profiling) |
+| Deployment & Export | Model export (ONNX, TorchScript), serving, benchmarking, API generation |
+| Documentation & Tooling | CLI tools, environment checks, and developer utilities |
+
+A common mistake is placing a feature under the domain where you first encountered the need rather than where the feature logically lives. For example, ONNX export benefits all model types, so it belongs under "Deployment & Export" even if you discovered the need while working on a vision model.
+
 ## How to submit notebook PRs?
 
 Please run [`nbdev_install_hooks`](https://nbdev.fast.ai/api/clean.html#nbdev_install_hooks) in your terminal after cloning the repository. This sets up git hooks, which clean up the notebooks to remove the extraneous stuff stored in the notebooks (e.g. which cells you ran) which causes unnecessary merge conflicts.
