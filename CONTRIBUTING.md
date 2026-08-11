@@ -83,6 +83,52 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Tracing Code: From API to Source Notebook
+
+fastai uses [nbdev](https://nbdev.fast.ai/) to generate library code from Jupyter notebooks. Understanding this flow is essential when debugging or contributing fixes.
+
+### How the pipeline works
+
+1. **Notebooks** in `/nbs/` are the source of truth. Each notebook has cells tagged with `#|export` that define the library code.
+2. Running `nbdev_export` extracts those cells into `.py` files under `/fastai/`.
+3. The mapping between notebooks and modules follows a naming convention:
+   - `00_torch_core.ipynb` generates `fastai/torch_core.py`
+   - `13b_metrics.ipynb` generates `fastai/metrics.py`
+   - `31_text.data.ipynb` generates `fastai/text/data.py`
+4. The file `fastai/_modidx.py` is an auto-generated index mapping every public symbol to its source notebook and module.
+
+### Tracing a function or class
+
+To find where a symbol is defined:
+
+```python
+# In a Python shell or notebook:
+from fastai._modidx import d
+d['syms']['fastai.metrics']['fastai.metrics.CorpusBLEUMetric']
+# Returns: ('metrics.html#corpusbleumetric', 'fastai/metrics.py')
+```
+
+Or search `_modidx.py` directly with grep:
+
+```bash
+grep "CorpusBLEUMetric" fastai/_modidx.py
+```
+
+The first element of the tuple gives you the docs page anchor, and the second gives you the generated `.py` file. To find the source notebook, look at the comment above the function in the `.py` file:
+
+```python
+# %% ../nbs/13b_metrics.ipynb 124
+class CorpusBLEUMetric(Metric):
+```
+
+This tells you the class comes from cell 124 of `nbs/13b_metrics.ipynb`.
+
+### When to edit notebooks vs. .py files
+
+- **Bug fix or feature change**: Edit the notebook cell, then run `nbdev_export` to regenerate the `.py` file.
+- **Quick local testing**: You can edit the `.py` file directly, but run `nbdev_update` afterward to sync changes back to the notebook before committing.
+- **Never commit** a state where the notebook and `.py` file are out of sync. Run `nbdev_export` or `nbdev_update` and verify with `nbdev_test --do_print`.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
