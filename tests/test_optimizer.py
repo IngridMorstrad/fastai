@@ -6,18 +6,16 @@ momentum_step, debias, step_stat), freeze/unfreeze, state management.
 """
 import sys
 import os
-import pytest
 import torch
 import torch.nn as nn
-import math
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.optimizer import (
     Optimizer, SGD, Adam, RMSProp, RAdam, QHAdam, Larc, Lamb, Lookahead, ranger,
     sgd_step, weight_decay, l2_reg, average_grad, average_sqr_grad,
-    momentum_step, step_stat, debias, rms_prop_step, adam_step,
-    OptimWrapper, detuplify_pg, set_item_pg,
+    momentum_step, step_stat, debias,
+    detuplify_pg, set_item_pg,
 )
 
 
