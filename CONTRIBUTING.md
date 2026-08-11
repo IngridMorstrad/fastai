@@ -21,6 +21,36 @@ Here are some ways that you can learn a lot about the library, whilst also contr
 - Document something that is currently undocumented. You can find them by looking for the “new methods” section in any doc notebook. Here’s a [search](https://github.com/fastai/fastai/search?q=%22new+methods%22&unscoped_q=%22new+methods%22) that lists them
 - Add an example of use to the docs for something that doesn’t currently have an example of use. We’d like everything soon in the docs to include an actual piece of working code demonstrating it. Currently, we’ve largely only provided working examples for stuff higher up the abstraction ladder.
 
+## Project Architecture
+
+The fastai library is built with [nbdev](https://nbdev.fast.ai/), meaning the source of truth lives in Jupyter notebooks under `/nbs`. The generated Python modules in `/fastai` are exported from those notebooks and should not be hand-edited.
+
+### Module layout
+
+| Directory/File | Purpose |
+|---|---|
+| `nbs/` | Source notebooks (numbered by topic; `nbdev_export` generates `.py` files from them) |
+| `fastai/torch_core.py` | Tensor subclass utilities, type dispatch, and PyTorch interop foundations |
+| `fastai/layers.py` | Reusable neural-network building blocks (activations, normalization, pooling) |
+| `fastai/data/` | DataLoaders pipeline: `core.py` (transforms, datasets), `load.py` (DataLoader), `block.py` (DataBlock API) |
+| `fastai/learner.py` | `Learner` class that ties together model, data, loss, optimizer, and callbacks |
+| `fastai/optimizer.py` | Optimizers and learning-rate scheduling |
+| `fastai/callback/` | Training-loop callbacks: scheduling, mixed precision, hooks, progress, and more |
+| `fastai/vision/` | Computer-vision: augmentations, models (xresnet, UNet), and GAN support |
+| `fastai/text/` | NLP: tokenization (`core.py`), numericalization and DataLoaders (`data.py`), and AWD-LSTM models |
+| `fastai/tabular/` | Tabular learning: pandas integration, categorical/continuous processing, and TabularModel |
+| `fastai/medical/` | Domain-specific medical imaging utilities |
+| `fastai/metrics.py` | Training metrics (accuracy, Bleu, perplexity, etc.) |
+| `fastai/interpret.py` | Interpretation tools (confusion matrices, top losses) |
+
+### Layered abstraction
+
+fastai follows a layered design: low-level PyTorch utilities (`torch_core`) are composed into data pipelines (`data/`), which feed into `Learner`, which is extended by callbacks (`callback/`). Domain modules (`vision/`, `text/`, `tabular/`) build on all layers and expose high-level `DataLoaders` factories and pre-built architectures.
+
+### Notebook-to-module mapping
+
+Notebook filenames encode module paths. For example, `31_text.data.ipynb` generates `fastai/text/data.py`. The leading number determines build order; the dotted name after it maps directly to the package path.
+
 ## Did you find a bug?
 
 * Nobody is perfect, especially not us. But first, please double-check the bug doesn't come from something on your side. The [forum](http://forums.fast.ai/) is a tremendous source for help, and we'd advise to use it as a first step. Be sure to include as much code as you can so that other people can easily help you.
