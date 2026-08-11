@@ -14,7 +14,6 @@ import os
 import math
 import pytest
 import torch
-import torch.nn.functional as F
 import numpy as np
 from types import SimpleNamespace
 

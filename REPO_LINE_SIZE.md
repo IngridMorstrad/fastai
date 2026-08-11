@@ -6,8 +6,8 @@ Last verified: 2026-08-07
 
 ## Summary
 
-- **Total lines**: 21041
-- **Dead code removed**: 13 lines (unused imports and one dead function)
+- **Total lines**: 25766
+- **Dead code removed**: 17 lines total (unused imports and one dead function across multiple cleanups)
 - **Other fixes applied**: replaced deprecated `pkg_resources` with `packaging.version` in setup.py
 
 ## Dead Code Removed
@@ -23,6 +23,10 @@ Last verified: 2026-08-07
 | `fastai/callback/captum.py` | Unused import `tempfile` |
 | `fastai/distributed.py` | Unused imports `_loaders` and `OptimWrapper` |
 | `fastai/vision/augment.py` | Unused import `Bernoulli` from `torch.distributions.bernoulli` |
+| `dev_nbs/course/crappify.py` | Unused import `ImageFont` from PIL |
+| `tests/test_layers.py` | Unused import `numpy as np` |
+| `tests/test_losses.py` | Unused imports `numpy as np` and `torch.nn.functional as F` |
+| `tests/test_metrics.py` | Unused import `torch.nn.functional as F` |
 
 ## Full Line Count (wc -l)
 
@@ -42,8 +46,8 @@ Last verified: 2026-08-07
     126 ./fastai/callback/progress.py
      44 ./fastai/callback/rnn.py
     299 ./fastai/callback/schedule.py
-    172 ./fastai/callback/tensorboard.py
-    209 ./fastai/callback/tracker.py
+    167 ./fastai/callback/tensorboard.py
+    279 ./fastai/callback/tracker.py
      59 ./fastai/callback/training.py
     324 ./fastai/callback/wandb.py
     104 ./fastai/collab.py
@@ -61,7 +65,7 @@ Last verified: 2026-08-07
       2 ./fastai/__init__.py
     174 ./fastai/interpret.py
     660 ./fastai/layers.py
-    687 ./fastai/learner.py
+    682 ./fastai/learner.py
     281 ./fastai/losses.py
     412 ./fastai/medical/imaging.py
       0 ./fastai/medical/__init__.py
@@ -75,7 +79,7 @@ Last verified: 2026-08-07
       0 ./fastai/tabular/__init__.py
      56 ./fastai/tabular/learner.py
      81 ./fastai/tabular/model.py
-    168 ./fastai/test_utils.py
+    165 ./fastai/test_utils.py
       6 ./fastai/text/all.py
     381 ./fastai/text/core.py
     290 ./fastai/text/data.py
@@ -92,6 +96,7 @@ Last verified: 2026-08-07
     309 ./fastai/vision/core.py
     221 ./fastai/vision/data.py
     406 ./fastai/vision/gan.py
+    231 ./fastai/vision/gradcam.py
       1 ./fastai/vision/__init__.py
     362 ./fastai/vision/learner.py
       3 ./fastai/vision/models/all.py
@@ -119,12 +124,20 @@ Last verified: 2026-08-07
      63 ./setup.py
      14 ./tests/conftest.py
       0 ./tests/__init__.py
-    477 ./tests/test_layers.py
+    441 ./tests/test_checkpoint_averaging.py
+    370 ./tests/test_collab.py
+    640 ./tests/test_data_loader.py
+    700 ./tests/test_dataloader.py
+    720 ./tests/test_data_load.py
+    699 ./tests/test_data_transforms.py
+    296 ./tests/test_gradcam.py
+    476 ./tests/test_layers.py
     146 ./tests/test_lm_dataloader.py
-    337 ./tests/test_losses.py
-   1293 ./tests/test_metrics.py
+    335 ./tests/test_losses.py
+   1292 ./tests/test_metrics.py
     353 ./tests/test_multi_metric_early_stopping.py
     773 ./tests/test_optimizer.py
+    575 ./tests/test_text_core.py
     528 ./tests/test_torch_core.py
-  21041 total
+  25766 total
 ```
