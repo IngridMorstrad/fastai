@@ -97,3 +97,19 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Bug Triage and Verification
+
+When triaging bugs from `BUGS.md` or GitHub issues, follow these steps to verify whether a reported bug is still present or has already been fixed:
+
+1. **Locate the relevant source code.** Bug entries in `BUGS.md` include the file path in parentheses. Open that file and find the function or class mentioned.
+2. **Read the implementation carefully.** Many reported bugs reference a missing feature or incorrect logic. Check whether subsequent commits have already addressed the problem. Look for TODO comments that may be stale (the fix was implemented but the comment was never removed).
+3. **Write a minimal reproducer.** Even if the code looks correct, confirm by writing a short script or test that exercises the reported bug path. If the behavior is correct, the bug is fixed.
+4. **Check git history for context.** Run `git log --oneline --all -- <file>` to see recent changes to the relevant file. Commit messages often clarify when and why a fix was introduced.
+5. **Update `BUGS.md`.** Move the entry from the "Open" section to "Fixed", appending a short explanation of how the fix works. For example:
+   ```
+   - <original bug description> - fixed: <brief explanation of the fix>
+   ```
+6. **Remove stale TODO comments.** If the code contains a TODO that references the now-fixed bug, remove it from both the notebook (`nbs/`) and the generated library file (`fastai/`). Always edit the notebook first, then run `nbdev_export` to regenerate the library, or edit both in sync.
+7. **Verify notebook/library sync.** After any change to exported cells or library files, run `python -m nbdev.export` and confirm `git status` shows no unexpected diffs. CI will reject PRs where notebooks and library are out of sync.
+

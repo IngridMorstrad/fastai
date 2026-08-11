@@ -320,7 +320,7 @@ eu_langs = ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "ga", "h
             "it","lt","lv","mt","nl","pl","pt","ro","sk","sl","sv"] # all European langs
 
 # %% ../../nbs/30_text.core.ipynb 76
-class SentencePieceTokenizer():#TODO: pass the special tokens symbol to sp
+class SentencePieceTokenizer():
     "SentencePiece tokenizer for `lang`"
     def __init__(self, lang='en', special_toks=None, sp_model=None, vocab_sz=None, max_vocab_sz=30000,
                  model_type='unigram', char_coverage=None, cache_dir='tmp'):
