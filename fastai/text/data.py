@@ -47,7 +47,7 @@ class Numericalize(Transform):
             if self.special_toks is None and hasattr(dsets, 'special_toks'):
                 self.special_toks = dsets.special_toks
             self.vocab = make_vocab(count, min_freq=self.min_freq, max_vocab=self.max_vocab, special_toks=self.special_toks)
-            self.o2i = defaultdict(int, {v:k for k,v in enumerate(self.vocab) if v != 'xxfake'})
+            self.o2i = defaultdict(int, {v:k for k,v in enumerate(self.vocab) if not v.startswith('xxfake')})
 
     def encodes(self, o): return TensorText(tensor([self.o2i  [o_] for o_ in o]))
     def decodes(self, o): return L(self.vocab[o_] for o_ in o)
