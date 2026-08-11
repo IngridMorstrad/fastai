@@ -97,3 +97,14 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Release and Versioning
+
+fastai uses [SemVer](https://semver.org/) versioning. Here is how releases relate to contributions:
+
+- **Version bumps** are handled by maintainers, not contributors. Do not modify `settings.ini` version fields in your PR.
+- **Release cadence**: there is no fixed schedule. Releases happen when enough significant changes accumulate or a critical fix lands.
+- **Which branch to target**: always base your PR on `master`. This is the only integration branch.
+- **When your change ships**: after your PR is merged to `master`, it will be included in the next PyPI/conda release. There is no separate staging branch.
+- **Breaking changes**: if your PR changes public API behavior, call it out clearly in the PR description. Breaking changes require a major version bump and additional review from maintainers.
+- **Changelog**: fastai does not maintain a manual CHANGELOG file. Release notes are generated from merged PR titles and descriptions, so write clear PR titles that summarize the user-visible effect.
