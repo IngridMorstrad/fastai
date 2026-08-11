@@ -83,6 +83,32 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Import Patterns and Module Accessibility
+
+fastai uses a layered import system. Understanding it prevents confusion when adding new modules or marking features as `[DONE]` in `FEATURE_REQUESTS.md`.
+
+### How `from fastai.vision.all import *` works
+
+Each subpackage has an `all.py` that re-exports everything users should access by default. For a module to be importable via `from fastai.vision.all import *`, it must be:
+
+1. **Imported in the subpackage's `all.py`** (e.g. `fastai/vision/all.py`)
+2. **Registered in `fastai/_modidx.py`** so nbdev can resolve it
+
+If a module defines `__all__` but is not imported in the relevant `all.py`, users must use a direct import (e.g. `from fastai.vision.gradcam import GradCAM`). This is fine for experimental or optional utilities, but should be documented clearly.
+
+### When marking a feature as [DONE]
+
+- If the implementation is accessible via the standard `all` import, reference the class/function name (e.g. "implemented as `CheckpointAveragingCallback`").
+- If the implementation requires a direct import, state the full import path so users know how to access it (e.g. "requires direct import: `from fastai.vision.gradcam import GradCAM`").
+
+### Adding a new module to the standard imports
+
+1. Create your module in the appropriate subpackage directory
+2. Define `__all__` listing every public name
+3. Add `from .your_module import *` to the subpackage's `all.py`
+4. Run `nbdev_export` to regenerate `_modidx.py`
+5. Verify with: `python -c "from fastai.vision.all import YourClass; print(YourClass)"`
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:

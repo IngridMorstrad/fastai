@@ -18,7 +18,7 @@ For discussions about features before implementation, please use the [fastai for
 ## Vision
 
 - Add native support for ONNX model export with dynamic batch-size axes directly from `Learner`
-- [DONE] Add built-in GradCAM/Grad-CAM++ visualization support to highlight class-discriminative regions in image predictions -- implemented in `fastai.vision.gradcam`
+- [DONE] Add built-in GradCAM/Grad-CAM++ visualization support to highlight class-discriminative regions in image predictions -- requires direct import: `from fastai.vision.gradcam import GradCAM, GradCAMPP, show_gradcam`
 
 ## Text
 
