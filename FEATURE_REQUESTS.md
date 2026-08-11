@@ -13,7 +13,7 @@ For discussions about features before implementation, please use the [fastai for
 
 - Support learning rate finder (`lr_find`) with multiple losses displayed on the same plot for multi-task models
 - Support automatic mixed-precision gradient scaling configuration per parameter group to allow selective full-precision training of sensitive layers (e.g. batch norm)
-- [DONE] Add a checkpoint averaging callback that maintains the top-K model checkpoints by validation loss and produces a weight-averaged model at the end of training for improved generalization -- implemented as `CheckpointAveragingCallback`
+- [DONE] Add a checkpoint averaging callback that maintains the top-K model checkpoints by a monitored metric (defaults to validation loss) and produces a weight-averaged model at the end of training for improved generalization -- implemented as `CheckpointAveragingCallback`
 
 ## Vision
 

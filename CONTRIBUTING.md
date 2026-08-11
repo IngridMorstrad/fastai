@@ -83,6 +83,69 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Environment Setup for Local Development
+
+Follow these steps to set up a local development environment for contributing to fastai:
+
+### 1. Clone and create a conda environment
+
+```bash
+git clone https://github.com/fastai/fastai.git
+cd fastai
+conda create -n fastai-dev python=3.9 -y
+conda activate fastai-dev
+```
+
+### 2. Install in editable mode with dev dependencies
+
+```bash
+pip install -e ".[dev]"
+```
+
+### 3. Install nbdev and git hooks
+
+fastai uses [nbdev](https://nbdev.fast.ai/) to develop from notebooks. After cloning, install the git hooks that strip notebook metadata (preventing noisy diffs and merge conflicts):
+
+```bash
+pip install nbdev
+nbdev_install_hooks
+```
+
+### 4. Verify your setup
+
+```bash
+# Export notebooks to library modules (ensures your .py files match the notebooks)
+nbdev_export
+
+# Run the test suite in parallel
+nbdev_test
+
+# If you only want to test a specific notebook:
+nbdev_test --fname nbs/00_torch_core.ipynb
+```
+
+### 5. Common workflow commands
+
+| Command | Purpose |
+|---------|---------|
+| `nbdev_export` | Sync notebook changes to library `.py` files |
+| `nbdev_update` | Sync library `.py` changes back to notebooks |
+| `nbdev_test` | Run all notebook tests in parallel |
+| `nbdev_clean` | Strip notebook metadata (also done by git hooks) |
+| `nbdev_preview` | Launch a local docs preview server |
+
+### 6. GPU testing (optional)
+
+If you have a CUDA-capable GPU, confirm PyTorch can see it:
+
+```python
+import torch
+print(torch.cuda.is_available())  # Should print True
+print(torch.cuda.get_device_name(0))
+```
+
+Some tests are skipped automatically when no GPU is present, so a CPU-only setup is fine for most contributions.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
