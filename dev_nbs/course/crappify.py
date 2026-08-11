@@ -1,5 +1,5 @@
 from fastai.basics import *
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 def resize_to(img, targ_sz, use_min=False):
     w,h = img.size
