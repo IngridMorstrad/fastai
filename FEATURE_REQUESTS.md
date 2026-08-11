@@ -22,7 +22,7 @@ For discussions about features before implementation, please use the [fastai for
 
 ## Text
 
-- Provide a high-level API for parameter-efficient fine-tuning (LoRA/QLoRA adapters) on large language models
+- Provide a high-level API for parameter-efficient fine-tuning (LoRA/QLoRA adapters) on HuggingFace transformer models via the existing blurr integration
 
 ## Tabular
 

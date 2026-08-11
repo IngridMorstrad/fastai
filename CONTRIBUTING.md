@@ -83,6 +83,37 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Local Development Setup
+
+To get a working development environment for fastai:
+
+1. **Clone and install in editable mode:**
+   ```bash
+   git clone https://github.com/fastai/fastai.git
+   cd fastai
+   pip install -e ".[dev]"
+   ```
+
+2. **Install nbdev hooks** (required before any notebook work):
+   ```bash
+   nbdev_install_hooks
+   ```
+
+3. **Verify your environment:**
+   ```python
+   import fastai.test_utils; fastai.test_utils.show_install(1)
+   ```
+
+4. **Run tests to confirm everything works:**
+   ```bash
+   nbdev_test --do_print
+   ```
+
+5. **Keep notebooks and library in sync:**
+   - After editing a notebook exported cell: run `nbdev_export`
+   - After editing a `.py` library file directly: run `nbdev_update`
+   - Before pushing: run `nbdev_export && git status --porcelain -uno` to verify nothing is out of sync
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
