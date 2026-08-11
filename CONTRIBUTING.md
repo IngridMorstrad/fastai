@@ -74,6 +74,43 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Same applies for PRs that implement new features - without having a test case validating this new feature, it'd be very easy for that new feature to break in the future. A test case ensures that the feature will not break.
 
 
+## Finding and Reporting Bugs Systematically
+
+If you want to help improve fastai by finding bugs, here are proven strategies:
+
+### Where to look
+
+1. **Callback lifecycle methods** - Check `before_*` and `after_*` methods in `fastai/callback/` for state that can be uninitialized, parameters that are accepted but silently ignored, or cleanup code that is unreachable.
+2. **Optimizer step functions** - Functions in `fastai/optimizer.py` that use `_defaults` vs `.defaults` attributes, or property setters that reassign loop variables instead of mutating the underlying data structure.
+3. **Schedule and annealing functions** - Math functions in `fastai/callback/schedule.py` that can divide by zero or produce `NaN` for edge-case inputs (e.g., `start=0`).
+4. **Model forward methods** - Look for `UnboundLocalError` paths in `forward()` when optional tensor inputs are all empty or zero-dimensional (e.g., `TabularModel` with no embeddings and no continuous features).
+5. **Loss function wrappers** - `BaseLoss` subclasses in `fastai/losses.py` where `.to()` does not return `self`, breaking method chaining.
+
+### What counts as a bug
+
+A bug is an issue that causes incorrect runtime behavior. It is NOT a style or naming preference. Specifically:
+
+- **Division by zero or NaN** from valid user inputs
+- **Silently ignored parameters** where a function signature accepts a value but never uses it
+- **Unreachable code** after early returns inside context managers
+- **Property setters that do nothing** due to reassigning local variables
+- **Unbound variables** on reachable code paths
+- **Incorrect tensor operations** that produce wrong gradients or loss values
+
+### How to verify a suspected bug
+
+1. Write a minimal reproducer that triggers the issue (a 5-10 line script is ideal).
+2. Check whether the behavior matches the docstring or function signature contract.
+3. Search existing issues and `BUGS.md` to confirm it has not already been reported.
+4. If confirmed, add a one-line entry to the `Open` section of `BUGS.md` following the format: `- description (file_path)`.
+
+### How to report
+
+When filing an issue or adding to `BUGS.md`:
+- State what the code does vs. what it should do.
+- Reference the exact file and function/method name.
+- Include a minimal code snippet that demonstrates the problem if possible.
+
 ## Do you have questions about the source code?
 
 * Please ask it on the [fastai forum](http://forums.fast.ai/) (after searching someone didn't ask the same one before with a quick search). We'd rather have the maximum of discussions there so that the largest number can benefit from it.

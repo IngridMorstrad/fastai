@@ -9,6 +9,11 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `Learner.summary` does not count parameters for individual `ParameterModule` instances wrapped outside of hook-tracked layers (`fastai/callback/hook.py`)
 - `TfmdDL` padding uses `L.items.index` instead of `L.index` due to an unresolved upstream bug in `L` (`fastai/text/data.py`)
 - `CorpusBLEU.value` compares `self.counts` (a list) against integer `0`, so the empty-counts guard is never triggered, risking ZeroDivisionError (`fastai/metrics.py`)
+- `Learner.fit_flat_cos` ignores the `start_epoch` parameter, always passing hardcoded `start_epoch=0` to `self.fit()` (`fastai/callback/schedule.py`)
+- `_BaseOptimizer.param_groups` setter reassigns a loop variable instead of mutating `self.param_lists`, so writing to `param_groups` silently does nothing (`fastai/optimizer.py`)
+- `sched_exp` computes `start * (end/start) ** pos` which raises `ZeroDivisionError` when `start=0` (`fastai/callback/schedule.py`)
+- `TabularModel.forward` raises `UnboundLocalError` when both `n_emb=0` and `n_cont=0` because `x` is never assigned before `return self.layers(x)` (`fastai/tabular/model.py`)
+- `ShowGraphCallback.after_epoch` calls `max(Tensor(val_losses))` which raises `RuntimeError` when `val_losses` is empty (no validation has run yet) (`fastai/callback/progress.py`)
 
 ## Fixed
 
