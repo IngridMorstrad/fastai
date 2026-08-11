@@ -8,21 +8,25 @@ For discussions about features before implementation, please use the [fastai for
 
 - Add built-in support for streaming/iterable datasets that do not fit in memory (e.g. webdataset or HuggingFace IterableDataset integration)
 - Add support for automatic dataset versioning and lineage tracking so users can reproduce experiments by referencing a specific data snapshot
+- Add a `DataLoaders.profile()` method that reports per-batch loading time, transform bottlenecks, and GPU idle gaps to help users optimize their data pipelines
 
 ## Training
 
 - Support learning rate finder (`lr_find`) with multiple losses displayed on the same plot for multi-task models
 - Support automatic mixed-precision gradient scaling configuration per parameter group to allow selective full-precision training of sensitive layers (e.g. batch norm)
 - [DONE] Add a checkpoint averaging callback that maintains the top-K model checkpoints by validation loss and produces a weight-averaged model at the end of training for improved generalization -- implemented as `CheckpointAveragingCallback`
+- Add a `Learner.distill_from(teacher)` method that wraps knowledge distillation training with configurable temperature and alpha blending between hard and soft label losses
 
 ## Vision
 
 - Add native support for ONNX model export with dynamic batch-size axes directly from `Learner`
 - [DONE] Add built-in GradCAM/Grad-CAM++ visualization support to highlight class-discriminative regions in image predictions -- implemented in `fastai.vision.gradcam`
+- Add a `vision_learner.test_time_augmentation()` method that applies configurable geometric and color augmentations at inference and merges predictions via averaging or voting for improved accuracy
 
 ## Text
 
 - Provide a high-level API for parameter-efficient fine-tuning (LoRA/QLoRA adapters) on large language models
+- Add a `TextLearner.explain(text)` method that returns token-level attribution scores (e.g. integrated gradients) highlighting which input tokens most influenced the prediction
 
 ## Tabular
 
@@ -37,6 +41,7 @@ For discussions about features before implementation, please use the [fastai for
 
 - Provide a `Learner.to_api()` convenience method that generates a minimal FastAPI/Flask prediction endpoint from a trained model
 - Add a `Learner.benchmark()` method that profiles inference latency, throughput, and memory usage across configurable batch sizes to help users choose optimal deployment settings
+- Add a `Learner.quantize(backend='fbgemm')` method that applies post-training dynamic or static quantization and reports accuracy-vs-speed tradeoffs compared to the full-precision model
 
 ## Documentation & Tooling
 
