@@ -83,6 +83,34 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Backward Compatibility Guidelines
+
+fastai is used in production systems, courses, and published research. Changes that silently break existing user code erode trust and create support burden. Follow these guidelines to keep the library stable while still evolving it.
+
+### Rules for public API changes
+
+1. **Never remove or rename a public function/class without a deprecation cycle.** Add a wrapper that calls the new implementation, emits a `DeprecationWarning` with the replacement name, and keep it for at least one minor release.
+2. **Never change default parameter values** in a way that alters existing behavior. If the new default is better for new users, introduce a new parameter or create a separate method.
+3. **Never change return types.** If a function returned a `list` and you want to return a `tensor`, add a new method or a `return_type` kwarg.
+4. **Additive changes are safe.** New parameters with defaults that preserve old behavior, new methods, and new modules do not require a deprecation period.
+
+### How to check for breakage
+
+- Search the notebooks in `/nbs` for usage of the symbol you are changing. These notebooks serve as integration tests and documentation; if they break, users will too.
+- Run `nbdev_test` on any notebook that exercises the changed API.
+- Grep the test suite (`tests/`) for direct calls to the modified function.
+- If your change modifies a callback's event signature, check that existing callbacks in `fastai/callback/` still work with the new signature.
+
+### Deprecation pattern
+
+```python
+def old_name(*args, **kwargs):
+    warnings.warn("`old_name` is deprecated; use `new_name` instead.", DeprecationWarning, stacklevel=2)
+    return new_name(*args, **kwargs)
+```
+
+Add a brief note in the PR description indicating which symbol is deprecated and what replaces it so maintainers can track removal timelines.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
