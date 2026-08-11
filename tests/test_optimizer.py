@@ -9,15 +9,14 @@ import os
 import pytest
 import torch
 import torch.nn as nn
-import math
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.optimizer import (
     Optimizer, SGD, Adam, RMSProp, RAdam, QHAdam, Larc, Lamb, Lookahead, ranger,
     sgd_step, weight_decay, l2_reg, average_grad, average_sqr_grad,
-    momentum_step, step_stat, debias, rms_prop_step, adam_step,
-    OptimWrapper, detuplify_pg, set_item_pg,
+    momentum_step, step_stat, debias,
+    detuplify_pg, set_item_pg,
 )
 
 
@@ -29,12 +28,6 @@ def _make_linear_model(in_features=4, out_features=2):
     """Create a simple linear model for optimizer testing."""
     model = nn.Linear(in_features, out_features, bias=True)
     return model
-
-
-def _set_grad(model, value=1.0):
-    """Set all parameter gradients to a constant value."""
-    for p in model.parameters():
-        p.grad = torch.full_like(p, value)
 
 
 def _get_params_with_grad(model, grad_value=1.0):

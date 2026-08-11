@@ -14,14 +14,13 @@ import os
 import math
 import pytest
 import torch
-import torch.nn.functional as F
 import numpy as np
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.metrics import (
-    AccumMetric, ActivationType, skm_to_fastai, optim_metric,
+    AccumMetric, ActivationType, skm_to_fastai,
     accuracy, error_rate, top_k_accuracy, accuracy_multi, foreground_acc,
     mse, mae, msle, rmse, exp_rmspe,
     Dice, DiceMulti, JaccardCoeff, JaccardCoeffMulti,
