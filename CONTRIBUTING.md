@@ -83,6 +83,43 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Writing Custom Transforms
+
+fastai's `Transform` class is the building block for all data processing pipelines. If you are contributing a new transform or modifying an existing one, keep these conventions in mind:
+
+### Basics
+
+- Subclass `Transform` (or `ItemTransform` / `DisplayedTransform` for specialized behavior).
+- Implement `encodes` for the forward pass and `decodes` for the reverse (used for visualization).
+- Use type annotations on `encodes`/`decodes` parameters to enable type dispatch; fastai will only call your transform when the input matches the declared type.
+
+```python
+class NormalizeCustom(Transform):
+    def __init__(self, mean, std): store_attr()
+    def encodes(self, x: TensorImage): return (x - self.mean) / self.std
+    def decodes(self, x: TensorImage): return x * self.std + self.mean
+```
+
+### Type dispatch
+
+- Multiple `encodes`/`decodes` methods with different type annotations are supported via `@typedispatch`-style overloading built into `Transform`.
+- If your transform should be a no-op for types it does not handle, you do not need to add an explicit fallback; unhandled types pass through automatically.
+
+### Ordering
+
+- Set `order` as a class attribute when your transform must run before or after others (lower values run first).
+- Check existing transforms in `fastai/data/transforms.py` and `fastai/vision/augment.py` for precedent.
+
+### Split-awareness
+
+- Use `split_idx` to indicate whether a transform applies only during training (`split_idx=0`) or validation (`split_idx=1`). Omit it to run on both.
+
+### Testing transforms
+
+- Write tests that verify round-tripping: `decode(encode(x))` should recover the original or a close approximation.
+- Test edge cases such as empty batches, single-item batches, and varying tensor shapes.
+- Use `test_eq` and `test_close` from `fastai.test_utils` for assertions.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
