@@ -83,6 +83,20 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Common Pitfalls When Contributing
+
+Avoid these frequent mistakes that trip up new (and experienced) contributors:
+
+1. **Editing `.py` files without updating the notebook.** The Python files in `fastai/` are auto-generated from notebooks in `nbs/`. If you edit a `.py` file directly, your change will be overwritten on the next export. Always make your change in the corresponding notebook cell first, then run `nbdev_export`. The only safe way to go the other direction is `nbdev_update`.
+
+2. **Forgetting that `make_vocab` padding tokens are indexed.** Padding tokens are named `xxfake0`, `xxfake1`, etc. Any code that filters or compares against the literal string `'xxfake'` (without a digit suffix) is stale and will silently fail.
+
+3. **Assuming `L` behaves like a plain Python list.** `L` (from `fastcore`) has intentional differences from `list`: `.index()` has known edge cases, `.items` is not always equivalent to the underlying storage, and operators like `+` perform element-wise operations rather than concatenation. Always test `L` behavior in a notebook cell before relying on it in library code.
+
+4. **Running tests from the wrong directory.** `nbdev_test` must be run from the repo root (where `settings.ini` lives). Running it from a subdirectory will either fail silently or test the wrong notebooks.
+
+5. **Breaking the notebook-library sync check in CI.** The GitHub Actions workflow runs `nbdev_export` and then checks for a clean `git diff`. If the exported `.py` files differ from what you committed, CI fails. Always run `nbdev_export && git diff` locally before pushing to confirm everything is in sync.
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
