@@ -9,6 +9,11 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `Learner.summary` does not count parameters for individual `ParameterModule` instances wrapped outside of hook-tracked layers (`fastai/callback/hook.py`)
 - `TfmdDL` padding uses `L.items.index` instead of `L.index` due to an unresolved upstream bug in `L` (`fastai/text/data.py`)
 - `CorpusBLEU.value` compares `self.counts` (a list) against integer `0`, so the empty-counts guard is never triggered, risking ZeroDivisionError (`fastai/metrics.py`)
+- `fit_flat_cos` accepts a `start_epoch` parameter but hardcodes `start_epoch=0` in the call to `self.fit`, so the argument is silently ignored (`fastai/callback/schedule.py`)
+- `log_dataset` uses `raise f'path must be a valid directory: {path}'` which raises a `TypeError` in Python 3 instead of a proper exception (`fastai/callback/wandb.py`)
+- `log_model` uses `raise f'path must be a valid file: {path}'` which raises a `TypeError` in Python 3 instead of a proper exception (`fastai/callback/wandb.py`)
+- `CutMix.rand_bbox` returns single-element tensors for box coordinates, so the `lam` recalculation `(1 - ((x2-x1)*(y2-y1))/float(W*H))` yields a tensor rather than a Python float, causing shape mismatches when `stack_y=False` and `torch.lerp` expects a scalar weight (`fastai/callback/mixup.py`)
+- `SaveModelCallback.after_fit` always calls `self.learn.load` when `every_epoch=False` and `at_end=False`, even if no improvement was ever found and no file was saved, raising a `FileNotFoundError` on short training runs (`fastai/callback/tracker.py`)
 
 ## Fixed
 
