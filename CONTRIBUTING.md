@@ -97,3 +97,15 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## How to Write a Good Feature Request
+
+When adding a feature request to `FEATURE_REQUESTS.md`, follow these guidelines to make it actionable for implementers:
+
+1. **One line, one feature.** Each entry should be a single bullet describing exactly one capability.
+2. **Start with a verb.** Use "Add...", "Provide...", "Support..." to make the intent clear immediately.
+3. **Name the API surface.** Mention the class or method where the feature would live (e.g. `Learner.distill_from(teacher)`) so readers can picture the integration point.
+4. **State the user benefit.** Briefly explain *why* someone would want this, not just *what* it does.
+5. **Pick the right category.** Place your entry under the most specific matching heading in `FEATURE_REQUESTS.md` (Data, Training, Vision, Text, Tabular, Callbacks, Deployment & Export, or Documentation & Tooling).
+6. **Avoid duplicates.** Search the file and open PRs before adding; if a similar request exists, consider refining that entry instead.
+7. **Mark completed items.** When a feature is implemented, prefix the line with `[DONE]` and append `-- implemented as/in <location>` so future readers know the status.
