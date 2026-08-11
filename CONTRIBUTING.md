@@ -83,6 +83,62 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Understanding the CI Pipeline
+
+When you open a PR, the GitHub Actions workflow (`.github/workflows/main.yml`) runs the `test-nbdev-sync` job. Understanding how it works helps you avoid frustrating CI failures.
+
+### What the CI checks
+
+The CI job does the following:
+
+1. Checks out your branch
+2. Installs `fastcore`, `nbdev`, and `fastai` (editable mode)
+3. Runs `python -m nbdev.export` to regenerate all `.py` files from notebooks
+4. Checks `git status` for uncommitted changes
+
+If the working tree is dirty after step 3, the job fails. This means your `.py` files are out of sync with the source notebooks.
+
+### Common CI failure scenarios
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| CI shows diff in `fastai/*.py` | You edited a `.py` file directly instead of its source notebook | Edit the notebook, then run `nbdev_export` locally |
+| CI shows diff in `_modidx.py` | You added/removed an exported cell without re-running export | Run `nbdev_export` and commit the updated `_modidx.py` |
+| CI passes but tests fail locally | Your local env has stale generated files | Run `nbdev_export` then `nbdev_update` to resync |
+
+### Safe changes that skip meaningful CI checks
+
+Changes that only touch these files will pass CI trivially (since `nbdev.export` only processes notebooks):
+
+- `*.md` files (README, CONTRIBUTING, BUGS, FEATURE_REQUESTS, etc.)
+- `tests/*.py` (test files are hand-written, not generated)
+- `.github/` workflow files
+- `dev_nbs/` (developer notebooks, not part of the export pipeline)
+
+### Running tests locally before pushing
+
+```bash
+# Run the full test suite via nbdev (executes all notebooks)
+nbdev_test
+
+# Run specific test files with pytest (faster for targeted checks)
+pytest tests/test_torch_core.py -x -q
+
+# Run tests matching a keyword
+pytest tests/ -k "test_tensor" -x -q
+
+# Verify notebook-to-source sync (same check CI runs)
+python -m nbdev.export && git status
+```
+
+### Debugging a CI failure
+
+1. Click the failing check on the PR page to view the GitHub Actions log
+2. Look for the `git status` or `git diff` output near the end
+3. The diff tells you exactly which generated file is out of sync
+4. Locally, run `nbdev_export` and check if it produces the same diff
+5. If so, commit the regenerated file. If not, your local nbdev version may differ from CI
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
