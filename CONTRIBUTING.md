@@ -83,6 +83,37 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Contributing to Domain Modules (Vision, Text, Tabular)
+
+Each domain module in fastai follows a consistent layered structure but has unique conventions. Understanding these differences will help you make targeted contributions without breaking cross-module consistency.
+
+### Vision (`fastai/vision/`)
+
+- **Core abstractions**: `PILImage`/`PILMask` types, `Transform` subclasses for augmentations, and `vision_learner`/`unet_learner` factory functions.
+- **Augmentation pipeline**: Image transforms live in `augment.py`. Each transform must work on both `PILImage` and `TensorImage` types (CPU and GPU paths). If you add a new augmentation, implement both the PIL path (for display) and the tensor path (for training speed).
+- **Pretrained models**: Architecture wrappers live in `models/`. When adding a new backbone, follow the existing pattern: accept a `pretrained` boolean, use `create_body` to cut the model, and register it so `vision_learner` can find it by string name.
+- **Testing**: Vision tests often need small synthetic images. Use `torch.randn(3, 64, 64)` or the `synth_learner` fixture rather than downloading real datasets.
+
+### Text (`fastai/text/`)
+
+- **Tokenization layer**: `core.py` defines tokenizers (`SpacyTokenizer`, `SentencePieceTokenizer`). Changes here must preserve the `xxbos`, `xxeos`, `xxfake`, `xxpad` special token conventions. Token names prefixed with `xx` are reserved.
+- **Numericalization**: `data.py` maps tokens to integers. The `o2i` dict and `vocab` list must stay in sync. When modifying `Numericalize`, always test round-trip consistency: `decode(numericalize(text)) == text`.
+- **AWD-LSTM specifics**: The language model in `models/awdlstm.py` uses weight dropout and activation regularization. If you modify training callbacks for text, verify they respect the `RNNRegularizer` callback ordering.
+- **Testing**: Text tests should use short synthetic corpora (a few sentences). Avoid importing large pretrained models in unit tests.
+
+### Tabular (`fastai/tabular/`)
+
+- **Data pipeline**: `core.py` defines `TabularProc` subclasses (`Categorify`, `FillMissing`, `Normalize`). These run as `Transform`s on DataFrames. When adding a new processor, inherit from `TabularProc` and implement `setups`, `encodes`, and `decodes`.
+- **Model architecture**: `model.py` defines `TabularModel` with embedding layers for categoricals and a linear path for continuous features. If you change the forward pass, test with both `n_emb > 0, n_cont > 0` and edge cases where one is zero.
+- **Pandas dependency**: Tabular code is tightly coupled to pandas DataFrames. Avoid introducing alternative DataFrame libraries (polars, modin) in core paths without discussion on the forum first.
+- **Testing**: Use small inline DataFrames (5-10 rows) with a mix of categorical and continuous columns. Test both the training path and the inference/prediction path.
+
+### General Rules Across All Domains
+
+1. **Notebook-first**: All exported code lives in notebooks under `nbs/`. Edit the notebook, then run `nbdev_export`. Never edit `fastai/*.py` directly for exported cells.
+2. **Type dispatch**: fastai uses `@typedispatch` and `Transform` subclasses extensively. New functionality should integrate with this system rather than using `isinstance` checks.
+3. **Minimal imports**: Each domain module should only import from `fastai.basics` or lower layers. Avoid cross-domain imports (e.g., don't import vision utilities in text code).
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
