@@ -28,6 +28,49 @@ Here are some ways that you can learn a lot about the library, whilst also contr
 * If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/fastai/fastai/issues/new). Be sure to include a title and clear description, as much relevant information as possible, and a code sample or an executable test case demonstrating the expected behavior that is not occurring.
 * Be sure to add the complete error messages as well as the result of the line `import fastai.test_utils; fastai.test_utils.show_install(1)`.
 
+## Documenting Bugs in BUGS.md
+
+In addition to opening a GitHub issue, we track confirmed bugs in [`BUGS.md`](BUGS.md). This gives contributors a quick overview of known defects without needing to sift through the issue tracker.
+
+### When to add an entry
+
+Add a bug to `BUGS.md` when:
+
+1. You can reproduce the incorrect behavior on the current `master` branch.
+2. The root cause is in fastai source code (not an upstream PyTorch issue, user misconfiguration, or environment problem).
+3. The bug is not already listed in the file.
+
+### Entry format
+
+Each entry is a single bullet under the **## Open** heading:
+
+```
+- `ClassName.method_name` brief description of the incorrect behavior (`fastai/path/to/file.py`)
+```
+
+Guidelines for writing the description:
+
+- **Start with the affected symbol** (class, function, or method) in backticks.
+- **State what goes wrong**, not what should happen. Be specific about the failure mode (wrong value, exception, silent data corruption).
+- **End with the file path** in parentheses so reviewers can locate the code immediately.
+- Keep each entry to one or two lines; link to an issue or discussion for extended analysis.
+
+### Verifying the bug exists
+
+Before submitting your entry:
+
+1. Check out the latest `master` and confirm the faulty code path is still present.
+2. Write a minimal script or test that demonstrates the wrong behavior.
+3. Search existing entries in `BUGS.md` and open GitHub issues to avoid duplicates.
+
+### Moving a bug to Fixed
+
+When a fix is merged, move the entry from **## Open** to **## Fixed** and append a short note describing the fix:
+
+```
+- `ClassName.method_name` description (`fastai/path/to/file.py`) - fixed by <brief explanation>
+```
+
 #### Did you write a patch that fixes a bug?
 
 * Open a new GitHub pull request with the patch.
