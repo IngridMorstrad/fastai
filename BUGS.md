@@ -9,6 +9,11 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `Learner.summary` does not count parameters for individual `ParameterModule` instances wrapped outside of hook-tracked layers (`fastai/callback/hook.py`)
 - `TfmdDL` padding uses `L.items.index` instead of `L.index` due to an unresolved upstream bug in `L` (`fastai/text/data.py`)
 - `CorpusBLEU.value` compares `self.counts` (a list) against integer `0`, so the empty-counts guard is never triggered, risking ZeroDivisionError (`fastai/metrics.py`)
+- `adam_step._defaults`, `radam_step._defaults`, and `qhadam_step._defaults` use the attribute name `_defaults` instead of `defaults`, so `Optimizer.__init__` which collects via `self.cbs.attrgot('defaults')` never merges these values into hyper-parameter defaults (`fastai/optimizer.py`)
+- `BaseLoss.to` does not return `self`, so calling `.to(device)` on a `BaseLoss` instance returns `None` and breaks method chaining (`fastai/losses.py`)
+- `Learner.get_preds` contains an unreachable `self._end_cleanup()` call placed after the `with ContextManagers(ctx_mgrs):` block, because `return tuple(res)` exits inside the block; post-prediction cleanup is never executed on that path (`fastai/learner.py`)
+- `Learner.tta` passes `shuffled=False` to `dl.new()`, but `DataLoader.__init__` accepts `shuffle` not `shuffled`; the misspelled kwarg is silently absorbed and the DataLoader may still shuffle during test-time augmentation (`fastai/learner.py`)
+- `CutMix.before_batch` writes directly into `self.learn.xb[0]` via in-place slice assignment (`xb[..., y1:y2, x1:x2] = xb1[...]`), which mutates the underlying storage of the original batch tensor and can corrupt prefetched data when `pin_memory=True` or when the same tensor is referenced elsewhere (`fastai/callback/mixup.py`)
 
 ## Fixed
 

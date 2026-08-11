@@ -97,3 +97,50 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Finding Bugs Through Source Inspection
+
+One of the most valuable contributions is identifying latent bugs by reading the source code directly. Below are patterns to look for and techniques for systematic inspection.
+
+### Common Bug Patterns in fastai
+
+1. **Attribute naming inconsistencies** - The framework relies on conventions like `.defaults` for optimizer callbacks. If a function uses `._defaults` (with underscore), the framework will silently ignore it. Search for `attrgot` calls to see what attribute names the framework expects, then verify all providers use the same spelling.
+
+2. **Missing `return self`** - Many methods (`.to()`, `.freeze()`, `.add_cbs()`) are expected to be chainable. If a method modifies state but forgets to `return self`, callers that chain will get `None`. Grep for `def to(self` and verify each returns `self`.
+
+3. **Unreachable code after `return` inside context managers** - When a `return` statement lives inside a `with` block, any code after the `with` block is unreachable. Look for methods with cleanup code placed after `with ... : return ...`.
+
+4. **Parameter name typos in `**kwargs` interfaces** - fastai's `DataLoader.new()` and similar methods accept `**kwargs`, which means misspelled parameter names are silently absorbed. Check that callers use the exact parameter name from `__init__` (e.g., `shuffle` not `shuffled`).
+
+5. **In-place tensor mutation in callbacks** - Callbacks that modify `self.learn.xb` or `self.learn.yb` via slice assignment (`tensor[..., a:b] = val`) mutate the underlying storage. This can corrupt data when `pin_memory=True` or when multiple references exist. Safe code should `.clone()` before mutating.
+
+### How to Inspect Systematically
+
+```bash
+# Find all .defaults / ._defaults attributes to check consistency
+grep -rn '\.defaults\s*=' fastai/
+grep -rn '\._defaults\s*=' fastai/
+
+# Find methods that accept **kwargs and might silently drop typos
+grep -rn 'def new(self.*\*\*kwargs' fastai/
+
+# Find .to() methods that might not return self
+grep -rn 'def to(self' fastai/ | head -20
+
+# Find in-place slice assignments in callbacks
+grep -rn 'self\.learn\.xb\[.*\]\[' fastai/callback/
+```
+
+### Writing a Good Bug Report for BUGS.md
+
+Each entry should include:
+
+- The affected symbol (class or function name) in backticks
+- A concise description of the incorrect behavior
+- Why it is wrong (what the expected behavior should be)
+- The file path in parentheses
+
+Example:
+```
+- `BaseLoss.to` does not return `self`, so calling `.to(device)` returns `None` and breaks method chaining (`fastai/losses.py`)
+```
