@@ -9,6 +9,11 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `Learner.summary` does not count parameters for individual `ParameterModule` instances wrapped outside of hook-tracked layers (`fastai/callback/hook.py`)
 - `TfmdDL` padding uses `L.items.index` instead of `L.index` due to an unresolved upstream bug in `L` (`fastai/text/data.py`)
 - `CorpusBLEU.value` compares `self.counts` (a list) against integer `0`, so the empty-counts guard is never triggered, risking ZeroDivisionError (`fastai/metrics.py`)
+- `DcmDataset.scaled_px` uses `hasattr(self, 'RescaleIntercept') is not None` which always evaluates to `True` (since `hasattr` returns a bool and any bool `is not None`), so rescaling is applied even when the DICOM file lacks `RescaleSlope`/`RescaleIntercept` attributes (`fastai/medical/imaging.py`)
+- `Learner.fit_flat_cos` accepts a `start_epoch` parameter but passes a hardcoded `start_epoch=0` to `self.fit(...)`, silently ignoring the caller-supplied value (`fastai/callback/schedule.py`)
+- `CutMix.before_batch` sets `self.yb1 = tuple((self.y[shuffle],))` instead of shuffling all target tensors, so in multi-target setups only the first target is blended while additional targets remain unshuffled (`fastai/callback/mixup.py`)
+- `Pad_Chunk.__init__` calls `store_attr('pad_idx, pad_first, seq_len,seq_len')` with `seq_len` duplicated and `decode` omitted, so the `decode` constructor parameter is never stored and `self.decode` in the `decodes` method references an unset attribute (`fastai/text/data.py`)
+- `CSVLogger.before_fit` calls `self.path.parent.mkdir(parents=True, exist_ok=True)` which creates the parent of the learner's base path rather than the parent of the log file; when `fname` contains subdirectories (e.g. `logs/history.csv`) the intermediate directory is never created and file open fails with `FileNotFoundError` (`fastai/callback/progress.py`)
 
 ## Fixed
 
