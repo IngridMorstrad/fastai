@@ -97,3 +97,53 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Testing Best Practices
+
+Writing good tests for fastai requires understanding how the library uses notebooks, GPU resources, and dynamic dispatch. Follow these guidelines to write tests that are reliable, fast, and useful.
+
+### Where to put tests
+
+- **Notebook-driven tests**: For features defined in notebooks (cells tagged with `#|export`), add test cells in the same notebook directly below the implementation. These run via `nbdev_test`.
+- **Standalone test files**: For integration tests or tests that require complex fixtures, add them under the `tests/` directory following the naming convention `test_<module>.py`.
+
+### Structuring a test
+
+1. **Arrange**: Create minimal synthetic data rather than downloading datasets. Use `synth_learner()` or small random tensors to avoid network dependencies and keep tests fast.
+2. **Act**: Call the function or train for 1-2 epochs only. Never train to convergence in a test.
+3. **Assert**: Check concrete values (tensor shapes, metric ranges, file existence) rather than just "no exception was raised."
+
+```python
+def test_lr_find_returns_suggestion():
+    learn = synth_learner()
+    lr_min, lr_steep = learn.lr_find(suggest_funcs=(minimum, steep))
+    assert 1e-7 < lr_min < 1.0, f"lr_min out of range: {lr_min}"
+    assert 1e-7 < lr_steep < 1.0, f"lr_steep out of range: {lr_steep}"
+```
+
+### Handling GPU and slow tests
+
+- Mark GPU-requiring tests with `@pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU")` so they are skipped gracefully in CPU-only CI environments.
+- For tests that take more than a few seconds (large model loading, multi-epoch training), add a `@pytest.mark.slow` marker and document why the duration is necessary.
+- Always set a small `bs` (batch size) and use tiny image sizes (e.g. 32x32) to minimize runtime.
+
+### Testing callbacks
+
+Callbacks interact with the training loop at specific events. Test them in isolation where possible:
+
+```python
+def test_custom_callback_fires():
+    called = []
+    class _TestCb(Callback):
+        def after_batch(self): called.append('after_batch')
+    learn = synth_learner(cbs=[_TestCb()])
+    learn.fit(1)
+    assert 'after_batch' in called
+```
+
+### Common pitfalls
+
+- **Non-determinism**: Set `torch.manual_seed()` and `random.seed()` at the top of tests that check numeric values. Floating-point comparisons should use `torch.allclose()` with an appropriate tolerance.
+- **Global state leakage**: Each test should create its own `Learner` and data. Never rely on objects created in a previous test.
+- **File cleanup**: If your test writes files (model exports, logs), use `tmp_path` (pytest) or Python's `tempfile` module and clean up in a `finally` block or fixture teardown.
+- **Mocking external services**: If a feature calls an external API (e.g. Weights & Biases logging), mock the network call rather than requiring credentials in CI.
