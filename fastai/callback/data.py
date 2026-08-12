@@ -54,7 +54,7 @@ class PartialDL(TfmdDL):
     "Select randomly partial quantity of data at each epoch"
     def __init__(self, dataset=None, bs=None, partial_n=None, **kwargs):
         super().__init__(dataset=dataset, bs=bs, **kwargs)
-        self.partial_n = min(partial_n, self.n) if partial_n else None
+        self.partial_n = min(partial_n, self.n) if partial_n is not None else None
 
     def get_idxs(self):
         if self.partial_n is None: return super().get_idxs()
