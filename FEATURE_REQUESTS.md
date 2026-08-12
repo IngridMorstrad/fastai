@@ -8,21 +8,25 @@ For discussions about features before implementation, please use the [fastai for
 
 - Add built-in support for streaming/iterable datasets that do not fit in memory (e.g. webdataset or HuggingFace IterableDataset integration)
 - Add support for automatic dataset versioning and lineage tracking so users can reproduce experiments by referencing a specific data snapshot
+- Add a DataLoader option for automatic class-balanced sampling that reweights batches to handle heavily imbalanced classification datasets without manual oversampling
 
 ## Training
 
 - Support learning rate finder (`lr_find`) with multiple losses displayed on the same plot for multi-task models
 - Support automatic mixed-precision gradient scaling configuration per parameter group to allow selective full-precision training of sensitive layers (e.g. batch norm)
 - [DONE] Add a checkpoint averaging callback that maintains the top-K model checkpoints by validation loss and produces a weight-averaged model at the end of training for improved generalization -- implemented as `CheckpointAveragingCallback`
+- Add a built-in gradient accumulation wrapper that transparently simulates larger batch sizes across multiple forward passes for memory-constrained GPUs
 
 ## Vision
 
 - Add native support for ONNX model export with dynamic batch-size axes directly from `Learner`
 - [DONE] Add built-in GradCAM/Grad-CAM++ visualization support to highlight class-discriminative regions in image predictions -- implemented in `fastai.vision.gradcam`
+- Add a built-in test-time augmentation (TTA) pipeline that supports configurable augmentation policies and ensembling strategies beyond simple averaging
 
 ## Text
 
 - Provide a high-level API for parameter-efficient fine-tuning (LoRA/QLoRA adapters) on large language models
+- Add a tokenizer-agnostic vocabulary inspector that reports token frequency, coverage, and out-of-vocabulary rate on a given corpus to aid text preprocessing decisions
 
 ## Tabular
 
@@ -32,6 +36,7 @@ For discussions about features before implementation, please use the [fastai for
 
 - [DONE] Add a built-in EarlyStopping callback that supports monitoring multiple metrics with configurable logic (any/all) -- implemented as `MultiMetricEarlyStoppingCallback`
 - Add a built-in GPU memory profiling callback that logs peak GPU memory usage per training step to help users diagnose OOM issues
+- Add a learning rate warmup callback that linearly or exponentially ramps the learning rate over a configurable number of initial steps to stabilize early training
 
 ## Deployment & Export
 
