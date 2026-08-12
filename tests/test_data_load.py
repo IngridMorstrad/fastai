@@ -717,3 +717,83 @@ class TestDataLoaderIntegration:
         batches = list(dl)
         assert len(batches) == 1
         assert batches[0].shape == (5,)
+
+
+# ============================================================
+# Tests for DataLoader prebatched (bs=None) property
+# ============================================================
+
+class TestDataLoaderPrebatched:
+    """Tests for DataLoader with prebatched data (bs=None)."""
+
+    def test_prebatched_property_true(self):
+        """prebatched is True when bs is None."""
+        ds = [[1, 2, 3], [4, 5, 6]]
+        dl = DataLoader(ds, bs=None)
+        assert dl.prebatched is True
+
+    def test_prebatched_property_false(self):
+        """prebatched is False when bs is set."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        assert dl.prebatched is False
+
+    def test_prebatched_converts_numpy(self):
+        """Prebatched DataLoader applies fa_convert to numpy arrays."""
+        ds = [np.array([1.0, 2.0]), np.array([3.0, 4.0])]
+        dl = DataLoader(ds, bs=None, num_workers=0)
+        batches = list(dl)
+        assert len(batches) == 2
+        assert isinstance(batches[0], torch.Tensor)
+        assert torch.equal(batches[0], torch.tensor([1.0, 2.0]))
+
+    def test_prebatched_len_equals_n(self):
+        """len of prebatched DataLoader equals n."""
+        ds = [[1, 2], [3, 4], [5, 6], [7, 8]]
+        dl = DataLoader(ds, bs=None)
+        assert len(dl) == 4
+
+
+# ============================================================
+# Tests for SkipItemException handling during iteration
+# ============================================================
+
+class TestSkipItemHandling:
+    """Tests for SkipItemException handling during full iteration."""
+
+    def test_do_item_returns_none_on_skip(self):
+        """do_item returns None when SkipItemException is raised."""
+        ds = list(range(5))
+        dl = DataLoader(ds, bs=2, num_workers=0)
+
+        def after_item_that_skips(x):
+            if x == 2:
+                raise SkipItemException()
+            return x
+
+        dl.after_item = after_item_that_skips
+        result = dl.do_item(2)
+        assert result is None
+
+    def test_do_item_normal_return(self):
+        """do_item returns the item when no exception is raised."""
+        ds = list(range(5))
+        dl = DataLoader(ds, bs=2, num_workers=0)
+        result = dl.do_item(0)
+        assert result == 0
+
+    def test_skip_item_filters_during_iteration(self):
+        """Items that raise SkipItemException are filtered out during iteration."""
+        ds = list(range(6))
+        dl = DataLoader(ds, bs=2, num_workers=0, shuffle=False)
+
+        def skip_odds(x):
+            if x % 2 != 0:
+                raise SkipItemException()
+            return x
+
+        dl.after_item = skip_odds
+        batches = list(dl)
+        # Only even items remain: 0, 2, 4 -> one batch of 2 and one partial of 1
+        all_items = torch.cat(batches).tolist()
+        assert all_items == [0, 2, 4]
