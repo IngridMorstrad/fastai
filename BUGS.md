@@ -13,12 +13,14 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `Pad_Chunk.__init__` calls `store_attr('pad_idx, pad_first, seq_len,seq_len')` which omits the `decode` parameter, so `self.decode` is never set and `Pad_Chunk.decodes` raises `AttributeError` (`fastai/text/data.py`)
 - `TensorBoardCallback.after_batch` does not check `self.run` before accessing `self.writer`, so when `run=False` (during `lr_find` or `gather_preds`) the missing writer causes `AttributeError` (`fastai/callback/tensorboard.py`)
 - `PartialDL.__init__` uses `if partial_n` to guard the `min()` call, which treats `partial_n=0` as `None` instead of producing an empty dataloader (`fastai/callback/data.py`)
-- `WeightedDL.__init__` computes `self.wgts = wgts/wgts.sum()` without guarding against a zero sum, so passing all-zero weights causes `ZeroDivisionError` (`fastai/callback/data.py`)
 - `log_dataset` and `log_model` use bare `raise f'...'` which evaluates the f-string but never raises an exception, so invalid paths are silently ignored (`fastai/callback/wandb.py`)
 - `fit_flat_cos` accepts a `start_epoch` parameter but passes hardcoded `start_epoch=0` to `self.fit()`, ignoring the caller's value (`fastai/callback/schedule.py`)
 - `GANDiscriminativeLR.after_batch` divides LR by `mult_lr` without checking `self.training`, so during validation the LR is divided even though `before_batch` only multiplied during training (`fastai/vision/gan.py`)
 - `Numericalize.setups` filters `v != 'xxfake'` when building `o2i`, but padding tokens are `'xxfake0'`, `'xxfake1'`, etc., so the filter never excludes them from the index map (`fastai/text/data.py`)
 - `CSVLogger.before_fit` calls `self.path.parent.mkdir(...)` which creates the parent of the learner path, but should create `(self.path/self.fname).parent` to handle `fname` values containing subdirectories (`fastai/callback/progress.py`)
+- `SortedDL.shuffle_fn` accesses `self.idx_max` unconditionally, but `__init__` only sets `self.idx_max` when `len(self.res) > 0`, so calling `shuffle_fn` on an empty dataset raises `AttributeError` (`fastai/text/data.py`)
+- `LRFinder.after_fit` accesses `self.tmp_p` unconditionally, but if `before_fit` raises an exception before setting `self.tmp_d`/`self.tmp_p` (e.g., path creation fails), `after_fit` raises a secondary `AttributeError` that masks the original error (`fastai/callback/schedule.py`)
+- `_download_image_inner` catches download exceptions but uses a bare f-string expression (`f"Couldn't download {url}."`) as the handler body, which is a no-op; errors are silently swallowed with no logging or warning (`fastai/vision/utils.py`)
 
 ## Fixed
 
