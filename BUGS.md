@@ -13,13 +13,12 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `Pad_Chunk.__init__` calls `store_attr('pad_idx, pad_first, seq_len,seq_len')` which omits the `decode` parameter, so `self.decode` is never set and `Pad_Chunk.decodes` raises `AttributeError` (`fastai/text/data.py`)
 - `TensorBoardCallback.after_batch` does not check `self.run` before accessing `self.writer`, so when `run=False` (during `lr_find` or `gather_preds`) the missing writer causes `AttributeError` (`fastai/callback/tensorboard.py`)
 - `PartialDL.__init__` uses `if partial_n` to guard the `min()` call, which treats `partial_n=0` as `None` instead of producing an empty dataloader (`fastai/callback/data.py`)
-- `WeightedDL.__init__` computes `self.wgts = wgts/wgts.sum()` without guarding against a zero sum, so passing all-zero weights causes `ZeroDivisionError` (`fastai/callback/data.py`)
 
 ## Fixed
 
 - `make_vocab` uses `f'xxfake'` without interpolating the loop variable, producing duplicate padding tokens instead of unique ones (`fastai/text/data.py`) - fixed by interpolating loop variable `i` in f-string (`f'xxfake{i}'`)
 - `CorpusBLEUMetric.value` compared `self.counts` (a list) against integer 0 which always evaluates False, disabling the zero-counts guard (`fastai/metrics.py`) - fixed by using `max(self.counts) == 0`
-- `LMDataLoader` does not support backward language model training (`fastai/text/data.py`) - added `backwards` parameter to `LMDataLoader.__init__` that reverses text sequences when enabled
+- `WeightedDL.__init__` computes `self.wgts = wgts/wgts.sum()` without guarding against a zero sum, so passing all-zero weights causes `ZeroDivisionError` (`fastai/callback/data.py`) - fixed by raising `ValueError("weights must not all be zero")` before normalization when `wgts.sum() == 0`
 
 ## Reporting a Bug
 

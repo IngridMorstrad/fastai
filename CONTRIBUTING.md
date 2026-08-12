@@ -396,3 +396,66 @@ def test_custom_callback_fires():
 - **Global state leakage**: Each test should create its own `Learner` and data. Never rely on objects created in a previous test.
 - **File cleanup**: If your test writes files (model exports, logs), use `tmp_path` (pytest) or Python's `tempfile` module and clean up in a `finally` block or fixture teardown.
 - **Mocking external services**: If a feature calls an external API (e.g. Weights & Biases logging), mock the network call rather than requiring credentials in CI.
+
+## GPU/CUDA Troubleshooting for Contributors
+
+Running fastai locally requires a working PyTorch installation, but CUDA version mismatches are one of the most common stumbling blocks for new contributors. This section covers how to diagnose and work around GPU-related issues during development.
+
+### Verifying your CUDA setup
+
+```python
+import torch
+print(torch.__version__)           # e.g. 2.1.0+cu121
+print(torch.cuda.is_available())   # True if GPU is usable
+print(torch.version.cuda)          # CUDA toolkit version bundled with PyTorch
+```
+
+If `torch.cuda.is_available()` returns `False`, the most common causes are:
+
+1. **Driver/toolkit mismatch**: Your NVIDIA driver is older than what the installed PyTorch CUDA build requires. Run `nvidia-smi` to see your driver version and compare against the [PyTorch compatibility matrix](https://pytorch.org/get-started/locally/).
+2. **CPU-only PyTorch installed**: If you installed PyTorch from a channel without specifying the CUDA variant, you may have a CPU-only build. Reinstall with the correct `--index-url` for your CUDA version.
+3. **No GPU present**: On machines without a discrete NVIDIA GPU (e.g., CI runners, Mac laptops), CUDA is unavailable by design.
+
+### Running tests without a GPU
+
+Most fastai tests can run on CPU. The test suite skips GPU-requiring tests automatically when no CUDA device is detected. To explicitly force CPU-only execution (useful for debugging non-GPU issues without interference):
+
+```bash
+CUDA_VISIBLE_DEVICES="" pytest tests/
+```
+
+Setting `CUDA_VISIBLE_DEVICES` to an empty string hides all GPUs from PyTorch, ensuring your tests exercise the CPU code paths.
+
+### Common CUDA errors and fixes
+
+| Error | Likely cause | Fix |
+|-------|-------------|-----|
+| `CUDA out of memory` | Batch size too large for GPU VRAM | Reduce `bs` in your test or use smaller image sizes (32x32) |
+| `CUDA error: device-side assert triggered` | Index out of bounds in a kernel (often wrong number of classes) | Check that `n_out` matches your label range; run with `CUDA_LAUNCH_BLOCKING=1` for a clearer stack trace |
+| `RuntimeError: CUDA error: no kernel image is available` | PyTorch built for a different GPU architecture | Reinstall PyTorch matching your GPU compute capability |
+| `libcudnn.so: cannot open shared object file` | cuDNN not installed or not on `LD_LIBRARY_PATH` | Install cuDNN matching your CUDA version, or use a conda environment that bundles it |
+
+### Debugging CUDA errors
+
+CUDA errors are asynchronous by default, meaning the Python stack trace points to a later operation rather than the one that actually failed. To get an accurate trace:
+
+```bash
+CUDA_LAUNCH_BLOCKING=1 python -m pytest tests/test_vision.py -x
+```
+
+This forces synchronous execution so the error is raised at the exact offending line. Note that this significantly slows down execution, so only use it for debugging.
+
+### Writing GPU-aware tests
+
+When contributing tests that require a GPU, guard them so they are skipped gracefully in CPU-only environments:
+
+```python
+import pytest, torch
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU available")
+def test_mixed_precision_training():
+    # test body that requires CUDA
+    ...
+```
+
+This keeps the test suite green for contributors who develop on CPU-only machines or in CI environments without GPU access.
