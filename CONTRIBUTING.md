@@ -21,6 +21,36 @@ Here are some ways that you can learn a lot about the library, whilst also contr
 - Document something that is currently undocumented. You can find them by looking for the “new methods” section in any doc notebook. Here’s a [search](https://github.com/fastai/fastai/search?q=%22new+methods%22&unscoped_q=%22new+methods%22) that lists them
 - Add an example of use to the docs for something that doesn’t currently have an example of use. We’d like everything soon in the docs to include an actual piece of working code demonstrating it. Currently, we’ve largely only provided working examples for stuff higher up the abstraction ladder.
 
+## Project Architecture
+
+The fastai library is built with [nbdev](https://nbdev.fast.ai/), meaning the source of truth lives in Jupyter notebooks under `/nbs`. The generated Python modules in `/fastai` are exported from those notebooks and should not be hand-edited.
+
+### Module layout
+
+| Directory/File | Purpose |
+|---|---|
+| `nbs/` | Source notebooks (numbered by topic; `nbdev_export` generates `.py` files from them) |
+| `fastai/torch_core.py` | Tensor subclass utilities, type dispatch, and PyTorch interop foundations |
+| `fastai/layers.py` | Reusable neural-network building blocks (activations, normalization, pooling) |
+| `fastai/data/` | DataLoaders pipeline: `core.py` (transforms, datasets), `load.py` (DataLoader), `block.py` (DataBlock API) |
+| `fastai/learner.py` | `Learner` class that ties together model, data, loss, optimizer, and callbacks |
+| `fastai/optimizer.py` | Optimizers and learning-rate scheduling |
+| `fastai/callback/` | Training-loop callbacks: scheduling, mixed precision, hooks, progress, and more |
+| `fastai/vision/` | Computer-vision: augmentations, models (xresnet, UNet), and GAN support |
+| `fastai/text/` | NLP: tokenization (`core.py`), numericalization and DataLoaders (`data.py`), and AWD-LSTM models |
+| `fastai/tabular/` | Tabular learning: pandas integration, categorical/continuous processing, and TabularModel |
+| `fastai/medical/` | Domain-specific medical imaging utilities |
+| `fastai/metrics.py` | Training metrics (accuracy, Bleu, perplexity, etc.) |
+| `fastai/interpret.py` | Interpretation tools (confusion matrices, top losses) |
+
+### Layered abstraction
+
+fastai follows a layered design: low-level PyTorch utilities (`torch_core`) are composed into data pipelines (`data/`), which feed into `Learner`, which is extended by callbacks (`callback/`). Domain modules (`vision/`, `text/`, `tabular/`) build on all layers and expose high-level `DataLoaders` factories and pre-built architectures.
+
+### Notebook-to-module mapping
+
+Notebook filenames encode module paths. For example, `31_text.data.ipynb` generates `fastai/text/data.py`. The leading number determines build order; the dotted name after it maps directly to the package path.
+
 ## Did you find a bug?
 
 * Nobody is perfect, especially not us. But first, please double-check the bug doesn't come from something on your side. The [forum](http://forums.fast.ai/) is a tremendous source for help, and we'd advise to use it as a first step. Be sure to include as much code as you can so that other people can easily help you.
@@ -41,6 +71,24 @@ Here are some ways that you can learn a lot about the library, whilst also contr
 * Before implementing a non-trivial new feature, first create a notebook version of your new feature, like those in [dev_nb](https://github.com/fastai/fastai_docs/tree/master/dev_nb). It should show step-by-step what your code is doing, and why, with the result of each step. Try to simplify the code as much as possible. When you're happy with it, let us know on the forum (include a link to gist with your notebook.)
 * Once your approach has been discussed and confirmed on the forum, you are welcome to push a PR, including a complete description of the new feature and an example of how it's used. Be sure to document your code and read the [doc on code style](https://docs.fast.ai/dev/style.html) and [the one on abbreviations](https://docs.fast.ai/dev/abbr.html).
 * Ensure that your PR includes tests that exercise not only your feature, but also any other code that might be impacted. Currently we have poor test coverage of existing features, so often you'll need to add tests of existing code. Your help here is much appreciated!
+
+## How to add a new module or subpackage
+
+fastai uses [nbdev](https://nbdev.fast.ai/), so new modules start life as notebooks. Here's the workflow:
+
+1. **Create a notebook** in `nbs/` following the naming convention `NN_module.name.ipynb` (e.g., `45_vision.filters.ipynb`). The numeric prefix controls the ordering in docs; pick a number that places your module logically among its neighbors.
+
+2. **Use `#|export` at the top of cells** that contain code you want in the final library. Only exported cells end up in the generated `.py` file.
+
+3. **Run `nbdev_export`** to generate (or regenerate) the corresponding `.py` file under `fastai/`. Never hand-edit generated `.py` files directly.
+
+4. **If you're adding a new subpackage**, make sure the subpackage directory is listed in `settings.ini` under `lib_path` and that the directory has an `__init__.py`.
+
+5. **Update `__init__.py` or `all.py`** for the subpackage so that the new module is importable via the package's public API (e.g., add the module to `_all_` or import it in `all.py`).
+
+6. **Add tests** in `tests/` following existing patterns (e.g., `test_modulename.py`). Look at nearby test files for conventions around imports and fixtures.
+
+7. **Do not edit `_modidx.py`** - it is auto-generated by nbdev. If it becomes stale, running `nbdev_export` will refresh it.
 
 ## How to submit notebook PRs?
 
@@ -111,6 +159,97 @@ def old_name(*args, **kwargs):
 
 Add a brief note in the PR description indicating which symbol is deprecated and what replaces it so maintainers can track removal timelines.
 
+## Migrating Code Contributions from fastai v1 to v2
+
+If you are porting a feature, fix, or example from fastai v1, keep the following differences in mind:
+
+### Key API changes
+
+| v1 pattern | v2 equivalent | Notes |
+|---|---|---|
+| `DataBunch.create(...)` | `DataLoaders(train_dl, valid_dl)` | DataLoaders is a thin wrapper; create the underlying DataLoader objects with `TfmdDL` |
+| `Learner(data, model, ...)` | `Learner(dls, model, ...)` | The first argument is now a `DataLoaders` instance, not a `DataBunch` |
+| `fit_one_cycle(cyc_len, max_lr)` | `fit_one_cycle(n_epoch, lr_max)` | Parameter names changed; `lr_max` replaces `max_lr` |
+| `ItemList.from_folder(...)` | `DataBlock(...).dataloaders(path)` | The mid-level `DataBlock` API replaces the `ItemList` pipeline |
+| `callback_fns=[...]` | `cbs=[...]` | Callbacks are passed as instances, not classes/factories |
+
+### Transform pipeline differences
+
+- v1 transforms are plain functions applied via `ItemList.add_tfms()`; v2 transforms are `Transform` subclasses with `encodes`/`decodes` methods that enable reversible pipelines.
+- Type dispatch means you define transforms once and they apply differently depending on whether the input is a `TensorImage`, `TensorText`, or `Category`. When porting, ensure your transform has proper type annotations.
+- v2 transforms can carry state through the `setup()` method (e.g., vocabulary, normalization statistics). Prefer this over global variables or class-level caches from v1.
+
+### Testing ported code
+
+1. Confirm the v1 behavior you are porting still makes sense in v2 - some features were intentionally removed or redesigned.
+2. Write your test against the v2 API from the start rather than adapting a v1 test. The test infrastructure uses `pytest` with fixtures defined in `conftest.py`.
+3. If the ported feature touches a notebook, remember that `nbdev_export` must be run to regenerate the `.py` files - edits to the generated files will be overwritten.
+
+### Common pitfalls when porting
+
+- **Importing from moved modules**: Many v1 utilities moved from `fastai.core` to `fastcore.foundation` or `fastcore.basics`. Check `fastcore` first if an import fails.
+- **`Callback` ordering**: v2 uses an explicit `order` attribute (lower runs first). If your v1 callback assumed a specific execution order relative to other callbacks, set `order` explicitly.
+- **`L` vs plain lists**: v2 uses the `L` container pervasively. It supports indexing with lists/masks and has different iteration semantics than a plain Python list. Wrap outputs in `L()` when the downstream API expects it.
+## Code Quality and Testing
+
+### Identifying Dead Code
+
+Dead code is code that is defined but never actually used at runtime. Common examples in Python include:
+
+- **Unused imports**: modules or names imported at the top of a file but never referenced in the body.
+  ```python
+  # Bad: numpy is imported but never used
+  import numpy as np
+  import torch
+
+  def my_func(x):
+      return torch.relu(x)
+  ```
+  ```python
+  # Good: only import what you use
+  import torch
+
+  def my_func(x):
+      return torch.relu(x)
+  ```
+
+- **Unreferenced helper functions**: functions defined (often during iterative development) that no caller ever invokes.
+  ```python
+  # Bad: _old_helper is defined but never called anywhere
+  def _old_helper(x):
+      return x * 2
+
+  def compute(x):
+      return x + 1
+  ```
+
+To find unused imports, search for `import` lines whose imported names do not appear elsewhere in the file. Tools like `flake8` (with the F401 rule) or `pylint` can automate this detection.
+
+### Running Tests
+
+Run the full test suite from the repository root:
+
+```bash
+pytest tests/
+```
+
+To run a specific test file:
+
+```bash
+pytest tests/test_optimizer.py
+```
+
+To run a specific test class or method:
+
+```bash
+pytest tests/test_optimizer.py::TestSGD::test_basic_step
+```
+
+### Test File Conventions
+
+- Test files in `tests/` are **not** notebook-managed. Unlike files in `fastai/` (which are auto-generated from notebooks via `nbdev_export`), test files can be edited directly without breaking nbdev sync.
+- The `tests/conftest.py` file already adds the repository root to `sys.path`, so pytest can import `fastai` modules without needing a package install.
+- Tests mock heavy dependencies (PyTorch training loops, GPU ops) where possible, so many tests run without a full training environment.
 ## Understanding Callback Ordering and Interactions
 
 Callbacks are fastai's primary extension mechanism. Getting their `order` attribute and inter-callback dependencies right is essential for writing correct callbacks and diagnosing bugs.
@@ -174,6 +313,39 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Release and Versioning
+
+fastai uses [SemVer](https://semver.org/) versioning. Here is how releases relate to contributions:
+
+- **Version bumps** are handled by maintainers, not contributors. Do not modify `settings.ini` version fields in your PR.
+- **Release cadence**: there is no fixed schedule. Releases happen when enough significant changes accumulate or a critical fix lands.
+- **Which branch to target**: always base your PR on `master`. This is the only integration branch.
+- **When your change ships**: after your PR is merged to `master`, it will be included in the next PyPI/conda release. There is no separate staging branch.
+- **Breaking changes**: if your PR changes public API behavior, call it out clearly in the PR description. Breaking changes require a major version bump and additional review from maintainers.
+- **Changelog**: fastai does not maintain a manual CHANGELOG file. Release notes are generated from merged PR titles and descriptions, so write clear PR titles that summarize the user-visible effect.
+## Dead Code Removal Guide
+
+Removing unused code reduces maintenance burden and makes the codebase easier to navigate. Here is how to safely identify and remove dead code in this project:
+
+### What qualifies as dead code
+
+- **Unused imports**: modules or names imported but never referenced in the file
+- **Unreachable functions**: functions defined but never called from any module
+- **Commented-out code**: old code left behind in comments with no explanatory reason
+
+### How to find dead code
+
+1. **Python AST analysis** - Parse a file's abstract syntax tree and compare imported names against all `Name` nodes used in the file body. An import that only appears in the import statement itself is dead.
+2. **Grep across the repo** - For a function or class defined in one file, search the entire repository (`grep -rn "function_name" --include="*.py"`) to confirm it is called somewhere.
+3. **Static analysis tools** - Tools like `vulture` or `pyflakes` automate unused-name detection.
+
+### Important constraints
+
+- **Do not edit autogenerated files** directly. Files starting with `# AUTOGENERATED! DO NOT EDIT!` are exported from notebooks via `nbdev_export`. To remove dead code from these files, edit the corresponding notebook in `nbs/` and re-export.
+- **Non-autogenerated files** (e.g., `fastai/fp16_utils.py`, `setup.py`, `tests/*.py`) can be edited directly.
+- **Always run the test suite** after removing imports to confirm nothing breaks. Some imports may have side effects (e.g., registering a module) even if the imported name is never referenced explicitly.
+- **Update `REPO_LINE_SIZE.md`** with the new `wc -l` output after your changes, so the line count stays current.
 
 ## Testing Best Practices
 

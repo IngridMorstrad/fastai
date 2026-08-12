@@ -5,7 +5,6 @@ device management, and other core tensor operations.
 """
 import sys
 import os
-import pytest
 import numpy as np
 import torch
 from torch import Tensor
