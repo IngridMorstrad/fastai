@@ -396,3 +396,91 @@ def test_custom_callback_fires():
 - **Global state leakage**: Each test should create its own `Learner` and data. Never rely on objects created in a previous test.
 - **File cleanup**: If your test writes files (model exports, logs), use `tmp_path` (pytest) or Python's `tempfile` module and clean up in a `finally` block or fixture teardown.
 - **Mocking external services**: If a feature calls an external API (e.g. Weights & Biases logging), mock the network call rather than requiring credentials in CI.
+
+## Debugging the Data Pipeline
+
+fastai's data pipeline (DataBlock, Transforms, DataLoaders) is where many contributors encounter confusing errors. This section explains how to trace data through the pipeline and pinpoint failures.
+
+### How data flows
+
+The pipeline has four stages:
+
+1. **Source** - raw items (file paths, DataFrame rows) collected by `get_items` or `splitter`
+2. **Item transforms** (`after_item`) - applied per-item before batching (e.g., open image, tokenize text)
+3. **Collation** - items are grouped into a batch tensor
+4. **Batch transforms** (`after_batch`) - applied on the GPU to the entire batch (e.g., augmentation, normalization)
+
+Errors at each stage have different symptoms:
+
+| Stage | Typical error | Debugging approach |
+|-------|---------------|-------------------|
+| Source | `FileNotFoundError`, empty DataLoaders | Check `dblock.summary(path)` output |
+| Item transforms | Shape mismatches, type errors | Call `dls.one_batch()` or `tds[0]` to isolate |
+| Collation | "cannot collate" / ragged tensor errors | Inspect item shapes with `[tds[i][0].shape for i in range(5)]` |
+| Batch transforms | CUDA errors, dtype mismatches | Run with `device='cpu'` first to get clearer tracebacks |
+
+### Key debugging tools
+
+**`DataBlock.summary(source)`** - The single most useful debugging command. It traces each pipeline step and prints where failures occur:
+
+```python
+dblock = DataBlock(
+    blocks=(ImageBlock, CategoryBlock),
+    get_items=get_image_files,
+    splitter=RandomSplitter(),
+    get_y=parent_label,
+    item_tfms=Resize(224)
+)
+dblock.summary(path)  # Prints detailed trace of each step
+```
+
+**`TfmdDL.one_batch()`** - Retrieves a single batch, exercising the full pipeline. If this fails, the problem is upstream of training.
+
+**`Datasets[i]`** - Access a single transformed item (before collation). Useful for isolating item-transform issues:
+
+```python
+dsets = dblock.datasets(path)
+x, y = dsets[0]  # First item after item transforms
+print(type(x), x.shape, type(y))
+```
+
+**`Transform.decode()`** - Reverse a transform to verify it is invertible. If `decode` fails, visualization (`show_batch`) will also break:
+
+```python
+tfm = Resize(224)
+encoded = tfm(img)
+decoded = tfm.decode(encoded)  # Should return a valid image
+```
+
+### Common data pipeline issues
+
+1. **Type dispatch not matching** - Transforms use type annotations to decide which `encodes` method to call. If your data does not have the expected type (e.g., `PILImage` vs `TensorImage`), the transform silently passes through without applying. Add explicit type annotations to custom transforms.
+
+2. **`n_inp` mismatch** - `DataLoaders` uses `n_inp` to split a batch into inputs and targets. If your DataBlock produces 3 items per sample but `n_inp=1` (the default), only the first is treated as input. Set `n_inp` explicitly when your pipeline returns multiple input tensors.
+
+3. **Transform ordering** - Transforms in `item_tfms` run in list order. A `Resize` placed after `ToTensor` will fail because `Resize` expects a PIL image, not a tensor. Always put spatial transforms before tensor conversion.
+
+4. **Vocabulary not built** - `Categorize` and `Numericalize` require a `setup()` call (handled automatically by DataBlock). If you build a pipeline manually, call `tfm.setup(dsets)` or the vocabulary will be empty and all labels map to index 0.
+
+5. **Leaking test data into training** - When writing custom splitters, verify that validation indices do not overlap with training indices. Use `dls.train_ds` and `dls.valid_ds` lengths to sanity-check the split.
+
+### Writing tests for custom transforms
+
+When contributing a new transform, include tests that verify:
+
+```python
+def test_my_transform_roundtrip():
+    tfm = MyTransform()
+    x = TensorImage(torch.randn(3, 64, 64))
+    encoded = tfm(x)
+    decoded = tfm.decode(encoded)
+    assert encoded.shape == (3, 64, 64)
+    assert decoded.shape == x.shape
+
+def test_my_transform_type_dispatch():
+    tfm = MyTransform()
+    # Should apply to TensorImage
+    assert tfm(TensorImage(torch.zeros(3,32,32))).sum() != 0
+    # Should pass through non-image types unchanged
+    assert tfm(TensorText(torch.zeros(10))) is not None
+```

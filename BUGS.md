@@ -11,7 +11,7 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `CorpusBLEU.value` compares `self.counts` (a list) against integer `0`, so the empty-counts guard is never triggered, risking ZeroDivisionError (`fastai/metrics.py`)
 - `fit_sgdr` raises `ZeroDivisionError` when `cycle_mult=1` because `n_epoch = cycle_len * (cycle_mult**n_cycles-1)//(cycle_mult-1)` divides by zero (`fastai/callback/schedule.py`)
 - `Pad_Chunk.__init__` calls `store_attr('pad_idx, pad_first, seq_len,seq_len')` which omits the `decode` parameter, so `self.decode` is never set and `Pad_Chunk.decodes` raises `AttributeError` (`fastai/text/data.py`)
-- `TensorBoardCallback.after_batch` does not check `self.run` before accessing `self.writer`, so when `run=False` (during `lr_find` or `gather_preds`) the missing writer causes `AttributeError` (`fastai/callback/tensorboard.py`)
+- `TensorBoardCallback.after_batch` does not individually guard against a missing `self.writer`, but `Callback.__call__` skips all event methods when `self.run=False`, so this path is unreachable under normal use; the real risk is subclasses that override `__call__` or external code that invokes `after_batch` directly (`fastai/callback/tensorboard.py`)
 - `PartialDL.__init__` uses `if partial_n` to guard the `min()` call, which treats `partial_n=0` as `None` instead of producing an empty dataloader (`fastai/callback/data.py`)
 - `WeightedDL.__init__` computes `self.wgts = wgts/wgts.sum()` without guarding against a zero sum, so passing all-zero weights causes `ZeroDivisionError` (`fastai/callback/data.py`)
 
