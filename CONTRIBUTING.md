@@ -21,6 +21,36 @@ Here are some ways that you can learn a lot about the library, whilst also contr
 - Document something that is currently undocumented. You can find them by looking for the “new methods” section in any doc notebook. Here’s a [search](https://github.com/fastai/fastai/search?q=%22new+methods%22&unscoped_q=%22new+methods%22) that lists them
 - Add an example of use to the docs for something that doesn’t currently have an example of use. We’d like everything soon in the docs to include an actual piece of working code demonstrating it. Currently, we’ve largely only provided working examples for stuff higher up the abstraction ladder.
 
+## Project Architecture
+
+The fastai library is built with [nbdev](https://nbdev.fast.ai/), meaning the source of truth lives in Jupyter notebooks under `/nbs`. The generated Python modules in `/fastai` are exported from those notebooks and should not be hand-edited.
+
+### Module layout
+
+| Directory/File | Purpose |
+|---|---|
+| `nbs/` | Source notebooks (numbered by topic; `nbdev_export` generates `.py` files from them) |
+| `fastai/torch_core.py` | Tensor subclass utilities, type dispatch, and PyTorch interop foundations |
+| `fastai/layers.py` | Reusable neural-network building blocks (activations, normalization, pooling) |
+| `fastai/data/` | DataLoaders pipeline: `core.py` (transforms, datasets), `load.py` (DataLoader), `block.py` (DataBlock API) |
+| `fastai/learner.py` | `Learner` class that ties together model, data, loss, optimizer, and callbacks |
+| `fastai/optimizer.py` | Optimizers and learning-rate scheduling |
+| `fastai/callback/` | Training-loop callbacks: scheduling, mixed precision, hooks, progress, and more |
+| `fastai/vision/` | Computer-vision: augmentations, models (xresnet, UNet), and GAN support |
+| `fastai/text/` | NLP: tokenization (`core.py`), numericalization and DataLoaders (`data.py`), and AWD-LSTM models |
+| `fastai/tabular/` | Tabular learning: pandas integration, categorical/continuous processing, and TabularModel |
+| `fastai/medical/` | Domain-specific medical imaging utilities |
+| `fastai/metrics.py` | Training metrics (accuracy, Bleu, perplexity, etc.) |
+| `fastai/interpret.py` | Interpretation tools (confusion matrices, top losses) |
+
+### Layered abstraction
+
+fastai follows a layered design: low-level PyTorch utilities (`torch_core`) are composed into data pipelines (`data/`), which feed into `Learner`, which is extended by callbacks (`callback/`). Domain modules (`vision/`, `text/`, `tabular/`) build on all layers and expose high-level `DataLoaders` factories and pre-built architectures.
+
+### Notebook-to-module mapping
+
+Notebook filenames encode module paths. For example, `31_text.data.ipynb` generates `fastai/text/data.py`. The leading number determines build order; the dotted name after it maps directly to the package path.
+
 ## Did you find a bug?
 
 * Nobody is perfect, especially not us. But first, please double-check the bug doesn't come from something on your side. The [forum](http://forums.fast.ai/) is a tremendous source for help, and we'd advise to use it as a first step. Be sure to include as much code as you can so that other people can easily help you.
@@ -101,6 +131,55 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Understanding Callback Ordering and Interactions
+
+Callbacks are fastai's primary extension mechanism. Getting their `order` attribute and inter-callback dependencies right is essential for writing correct callbacks and diagnosing bugs.
+
+### Execution order
+
+Every callback has an `order` class attribute (default 0). Lower values run first. Key built-in orderings:
+
+| Callback | order | Why |
+|----------|-------|-----|
+| `TrainEvalCallback` | 10 | Sets train/eval mode before anything else |
+| `Recorder` | 50 | Records metrics after the batch is done |
+| `ProgressCallback` | 60 | Displays after recording |
+| `TrackerCallback` | 60 | Reads recorded metrics |
+| `SaveModelCallback` | 61 | Acts on tracker results |
+| `EarlyStoppingCallback` | 63 | Acts after save decisions |
+| `MixedPrecision` | 10 | Wraps forward pass in autocast |
+
+When writing a new callback, pick an `order` relative to the callbacks you depend on. If your callback reads `self.smooth_loss`, it must run **after** `Recorder` (order > 50).
+
+### Attribute resolution via GetAttr
+
+Callbacks inherit from `GetAttr` with `_default='learn'`. This means:
+- `self.model` resolves to `self.learn.model`
+- `self.opt` resolves to `self.learn.opt`
+- `self.recorder` finds the `Recorder` callback instance (learner searches callbacks by lowercase class name)
+
+When one callback needs state from another, use this delegation (e.g., `self.recorder.values`). Do **not** store cross-callback references in `__init__`.
+
+### Common pitfalls
+
+1. **Missing `self.run` guards** - If your callback sets `self.run = False` in `before_fit` (e.g., during `lr_find`), every other event method must check `if not self.run: return` before accessing state created in `before_fit`.
+
+2. **Accessing uninitialized state** - If `before_fit` creates `self.writer` or `self.hps`, ensure `after_batch`/`after_epoch` only access them after confirming initialization succeeded.
+
+3. **Order conflicts with `MixedPrecision`** - The `MixedPrecision` callback enters an autocast context in `before_batch` and exits in `after_loss`. Any callback that modifies the loss between these events must account for the precision state.
+
+4. **`store_attr` with explicit names** - When calling `store_attr('a, b, c')` with an explicit list, parameters not in the list are silently dropped. Always verify that every parameter your methods reference is included.
+
+### Testing callbacks
+
+Write tests that exercise your callback in isolation using `ShortEpochCallback` to limit training:
+
+```python
+learn = synth_learner(cbs=[MyCallback(), ShortEpochCallback()])
+learn.fit(1)
+# assert on state your callback should have set
+```
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
@@ -115,3 +194,76 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Dead Code Removal Guide
+
+Removing unused code reduces maintenance burden and makes the codebase easier to navigate. Here is how to safely identify and remove dead code in this project:
+
+### What qualifies as dead code
+
+- **Unused imports**: modules or names imported but never referenced in the file
+- **Unreachable functions**: functions defined but never called from any module
+- **Commented-out code**: old code left behind in comments with no explanatory reason
+
+### How to find dead code
+
+1. **Python AST analysis** - Parse a file's abstract syntax tree and compare imported names against all `Name` nodes used in the file body. An import that only appears in the import statement itself is dead.
+2. **Grep across the repo** - For a function or class defined in one file, search the entire repository (`grep -rn "function_name" --include="*.py"`) to confirm it is called somewhere.
+3. **Static analysis tools** - Tools like `vulture` or `pyflakes` automate unused-name detection.
+
+### Important constraints
+
+- **Do not edit autogenerated files** directly. Files starting with `# AUTOGENERATED! DO NOT EDIT!` are exported from notebooks via `nbdev_export`. To remove dead code from these files, edit the corresponding notebook in `nbs/` and re-export.
+- **Non-autogenerated files** (e.g., `fastai/fp16_utils.py`, `setup.py`, `tests/*.py`) can be edited directly.
+- **Always run the test suite** after removing imports to confirm nothing breaks. Some imports may have side effects (e.g., registering a module) even if the imported name is never referenced explicitly.
+- **Update `REPO_LINE_SIZE.md`** with the new `wc -l` output after your changes, so the line count stays current.
+
+## Testing Best Practices
+
+Writing good tests for fastai requires understanding how the library uses notebooks, GPU resources, and dynamic dispatch. Follow these guidelines to write tests that are reliable, fast, and useful.
+
+### Where to put tests
+
+- **Notebook-driven tests**: For features defined in notebooks (cells tagged with `#|export`), add test cells in the same notebook directly below the implementation. These run via `nbdev_test`.
+- **Standalone test files**: For integration tests or tests that require complex fixtures, add them under the `tests/` directory following the naming convention `test_<module>.py`.
+
+### Structuring a test
+
+1. **Arrange**: Create minimal synthetic data rather than downloading datasets. Use `synth_learner()` or small random tensors to avoid network dependencies and keep tests fast.
+2. **Act**: Call the function or train for 1-2 epochs only. Never train to convergence in a test.
+3. **Assert**: Check concrete values (tensor shapes, metric ranges, file existence) rather than just "no exception was raised."
+
+```python
+def test_lr_find_returns_suggestion():
+    learn = synth_learner()
+    lr_min, lr_steep = learn.lr_find(suggest_funcs=(minimum, steep))
+    assert 1e-7 < lr_min < 1.0, f"lr_min out of range: {lr_min}"
+    assert 1e-7 < lr_steep < 1.0, f"lr_steep out of range: {lr_steep}"
+```
+
+### Handling GPU and slow tests
+
+- Mark GPU-requiring tests with `@pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU")` so they are skipped gracefully in CPU-only CI environments.
+- For tests that take more than a few seconds (large model loading, multi-epoch training), add a `@pytest.mark.slow` marker and document why the duration is necessary.
+- Always set a small `bs` (batch size) and use tiny image sizes (e.g. 32x32) to minimize runtime.
+
+### Testing callbacks
+
+Callbacks interact with the training loop at specific events. Test them in isolation where possible:
+
+```python
+def test_custom_callback_fires():
+    called = []
+    class _TestCb(Callback):
+        def after_batch(self): called.append('after_batch')
+    learn = synth_learner(cbs=[_TestCb()])
+    learn.fit(1)
+    assert 'after_batch' in called
+```
+
+### Common pitfalls
+
+- **Non-determinism**: Set `torch.manual_seed()` and `random.seed()` at the top of tests that check numeric values. Floating-point comparisons should use `torch.allclose()` with an appropriate tolerance.
+- **Global state leakage**: Each test should create its own `Learner` and data. Never rely on objects created in a previous test.
+- **File cleanup**: If your test writes files (model exports, logs), use `tmp_path` (pytest) or Python's `tempfile` module and clean up in a `finally` block or fixture teardown.
+- **Mocking external services**: If a feature calls an external API (e.g. Weights & Biases logging), mock the network call rather than requiring credentials in CI.

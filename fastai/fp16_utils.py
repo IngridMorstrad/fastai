@@ -1,6 +1,5 @@
 #Code directly taken from NVIDIA apex: https://github.com/NVIDIA/apex
 import torch
-import torch.nn as nn
 from torch.autograd import Variable
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 

@@ -7,7 +7,6 @@ can be validated without installing PyTorch.
 import sys
 import types
 import unittest
-from unittest.mock import MagicMock
 import numpy as np
 
 
