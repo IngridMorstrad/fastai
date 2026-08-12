@@ -1,9 +1,5 @@
 # Repository Line Count
 
-Line counts for all Python files in the repository, generated with `find . -name "*.py" -not -path "*/__pycache__/*" | sort | xargs wc -l`.
-
-Last verified: 2026-08-10
-
 ```
      24 ./dev_nbs/course/crappify.py
       6 ./fastai/basics.py
@@ -28,7 +24,6 @@ Last verified: 2026-08-10
       6 ./fastai/data/all.py
     247 ./fastai/data/block.py
     528 ./fastai/data/core.py
-    107 ./fastai/data/download_checks.py
     138 ./fastai/data/external.py
       1 ./fastai/data/__init__.py
     215 ./fastai/data/load.py
@@ -46,7 +41,6 @@ Last verified: 2026-08-10
     473 ./fastai/metrics.py
    2682 ./fastai/_modidx.py
     497 ./fastai/optimizer.py
-     46 ./fastai/_pytorch_doc.py
       6 ./fastai/tabular/all.py
     404 ./fastai/tabular/core.py
      60 ./fastai/tabular/data.py
@@ -114,5 +108,5 @@ Last verified: 2026-08-10
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  25647 total
+  25494 total
 ```
