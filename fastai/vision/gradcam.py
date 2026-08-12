@@ -68,7 +68,7 @@ class GradCAM:
                 f"but got batch size {input_tensor.shape[0]}."
             )
 
-        input_tensor = input_tensor.requires_grad_(True)
+        input_tensor = input_tensor.detach().requires_grad_(True)
         was_training = self.model.training
         self.model.eval()
         try:
