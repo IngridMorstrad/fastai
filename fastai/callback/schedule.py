@@ -134,7 +134,7 @@ def fit_sgdr(self:Learner, n_cycles, cycle_len, lr_max=None, cycle_mult=2, cbs=N
     if self.opt is None: self.create_opt()
     self.opt.set_hyper('lr', self.lr if lr_max is None else lr_max)
     lr_max = np.array([h['lr'] for h in self.opt.hypers])
-    n_epoch = cycle_len * (cycle_mult**n_cycles-1)//(cycle_mult-1)
+    n_epoch = cycle_len * n_cycles if cycle_mult == 1 else cycle_len * (cycle_mult**n_cycles-1)//(cycle_mult-1)
     pcts = [cycle_len * cycle_mult**i / n_epoch for i in range(n_cycles)]
     scheds = [SchedCos(lr_max, 0) for _ in range(n_cycles)]
     scheds = {'lr': combine_scheds(pcts, scheds)}
