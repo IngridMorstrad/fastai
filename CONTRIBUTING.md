@@ -111,6 +111,55 @@ def old_name(*args, **kwargs):
 
 Add a brief note in the PR description indicating which symbol is deprecated and what replaces it so maintainers can track removal timelines.
 
+## Understanding Callback Ordering and Interactions
+
+Callbacks are fastai's primary extension mechanism. Getting their `order` attribute and inter-callback dependencies right is essential for writing correct callbacks and diagnosing bugs.
+
+### Execution order
+
+Every callback has an `order` class attribute (default 0). Lower values run first. Key built-in orderings:
+
+| Callback | order | Why |
+|----------|-------|-----|
+| `TrainEvalCallback` | 10 | Sets train/eval mode before anything else |
+| `Recorder` | 50 | Records metrics after the batch is done |
+| `ProgressCallback` | 60 | Displays after recording |
+| `TrackerCallback` | 60 | Reads recorded metrics |
+| `SaveModelCallback` | 61 | Acts on tracker results |
+| `EarlyStoppingCallback` | 63 | Acts after save decisions |
+| `MixedPrecision` | 10 | Wraps forward pass in autocast |
+
+When writing a new callback, pick an `order` relative to the callbacks you depend on. If your callback reads `self.smooth_loss`, it must run **after** `Recorder` (order > 50).
+
+### Attribute resolution via GetAttr
+
+Callbacks inherit from `GetAttr` with `_default='learn'`. This means:
+- `self.model` resolves to `self.learn.model`
+- `self.opt` resolves to `self.learn.opt`
+- `self.recorder` finds the `Recorder` callback instance (learner searches callbacks by lowercase class name)
+
+When one callback needs state from another, use this delegation (e.g., `self.recorder.values`). Do **not** store cross-callback references in `__init__`.
+
+### Common pitfalls
+
+1. **Missing `self.run` guards** - If your callback sets `self.run = False` in `before_fit` (e.g., during `lr_find`), every other event method must check `if not self.run: return` before accessing state created in `before_fit`.
+
+2. **Accessing uninitialized state** - If `before_fit` creates `self.writer` or `self.hps`, ensure `after_batch`/`after_epoch` only access them after confirming initialization succeeded.
+
+3. **Order conflicts with `MixedPrecision`** - The `MixedPrecision` callback enters an autocast context in `before_batch` and exits in `after_loss`. Any callback that modifies the loss between these events must account for the precision state.
+
+4. **`store_attr` with explicit names** - When calling `store_attr('a, b, c')` with an explicit list, parameters not in the list are silently dropped. Always verify that every parameter your methods reference is included.
+
+### Testing callbacks
+
+Write tests that exercise your callback in isolation using `ShortEpochCallback` to limit training:
+
+```python
+learn = synth_learner(cbs=[MyCallback(), ShortEpochCallback()])
+learn.fit(1)
+# assert on state your callback should have set
+```
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
@@ -125,3 +174,53 @@ Before marking your pull request as ready for review, verify the following:
 - [ ] **Docs updated** - if your change affects public API, update or add a docstring and an example in the relevant notebook
 - [ ] **Single concern** - the PR addresses one bug fix or one feature, not a mix of unrelated changes
 - [ ] **Clean history** - squash fixup commits; each commit in the PR should represent a logical unit of work
+
+## Testing Best Practices
+
+Writing good tests for fastai requires understanding how the library uses notebooks, GPU resources, and dynamic dispatch. Follow these guidelines to write tests that are reliable, fast, and useful.
+
+### Where to put tests
+
+- **Notebook-driven tests**: For features defined in notebooks (cells tagged with `#|export`), add test cells in the same notebook directly below the implementation. These run via `nbdev_test`.
+- **Standalone test files**: For integration tests or tests that require complex fixtures, add them under the `tests/` directory following the naming convention `test_<module>.py`.
+
+### Structuring a test
+
+1. **Arrange**: Create minimal synthetic data rather than downloading datasets. Use `synth_learner()` or small random tensors to avoid network dependencies and keep tests fast.
+2. **Act**: Call the function or train for 1-2 epochs only. Never train to convergence in a test.
+3. **Assert**: Check concrete values (tensor shapes, metric ranges, file existence) rather than just "no exception was raised."
+
+```python
+def test_lr_find_returns_suggestion():
+    learn = synth_learner()
+    lr_min, lr_steep = learn.lr_find(suggest_funcs=(minimum, steep))
+    assert 1e-7 < lr_min < 1.0, f"lr_min out of range: {lr_min}"
+    assert 1e-7 < lr_steep < 1.0, f"lr_steep out of range: {lr_steep}"
+```
+
+### Handling GPU and slow tests
+
+- Mark GPU-requiring tests with `@pytest.mark.skipif(not torch.cuda.is_available(), reason="No GPU")` so they are skipped gracefully in CPU-only CI environments.
+- For tests that take more than a few seconds (large model loading, multi-epoch training), add a `@pytest.mark.slow` marker and document why the duration is necessary.
+- Always set a small `bs` (batch size) and use tiny image sizes (e.g. 32x32) to minimize runtime.
+
+### Testing callbacks
+
+Callbacks interact with the training loop at specific events. Test them in isolation where possible:
+
+```python
+def test_custom_callback_fires():
+    called = []
+    class _TestCb(Callback):
+        def after_batch(self): called.append('after_batch')
+    learn = synth_learner(cbs=[_TestCb()])
+    learn.fit(1)
+    assert 'after_batch' in called
+```
+
+### Common pitfalls
+
+- **Non-determinism**: Set `torch.manual_seed()` and `random.seed()` at the top of tests that check numeric values. Floating-point comparisons should use `torch.allclose()` with an appropriate tolerance.
+- **Global state leakage**: Each test should create its own `Learner` and data. Never rely on objects created in a previous test.
+- **File cleanup**: If your test writes files (model exports, logs), use `tmp_path` (pytest) or Python's `tempfile` module and clean up in a `finally` block or fixture teardown.
+- **Mocking external services**: If a feature calls an external API (e.g. Weights & Biases logging), mock the network call rather than requiring credentials in CI.
