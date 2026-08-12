@@ -83,6 +83,55 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Understanding Callback Ordering and Interactions
+
+Callbacks are fastai's primary extension mechanism. Getting their `order` attribute and inter-callback dependencies right is essential for writing correct callbacks and diagnosing bugs.
+
+### Execution order
+
+Every callback has an `order` class attribute (default 0). Lower values run first. Key built-in orderings:
+
+| Callback | order | Why |
+|----------|-------|-----|
+| `TrainEvalCallback` | 10 | Sets train/eval mode before anything else |
+| `Recorder` | 50 | Records metrics after the batch is done |
+| `ProgressCallback` | 60 | Displays after recording |
+| `TrackerCallback` | 60 | Reads recorded metrics |
+| `SaveModelCallback` | 61 | Acts on tracker results |
+| `EarlyStoppingCallback` | 63 | Acts after save decisions |
+| `MixedPrecision` | 10 | Wraps forward pass in autocast |
+
+When writing a new callback, pick an `order` relative to the callbacks you depend on. If your callback reads `self.smooth_loss`, it must run **after** `Recorder` (order > 50).
+
+### Attribute resolution via GetAttr
+
+Callbacks inherit from `GetAttr` with `_default='learn'`. This means:
+- `self.model` resolves to `self.learn.model`
+- `self.opt` resolves to `self.learn.opt`
+- `self.recorder` finds the `Recorder` callback instance (learner searches callbacks by lowercase class name)
+
+When one callback needs state from another, use this delegation (e.g., `self.recorder.values`). Do **not** store cross-callback references in `__init__`.
+
+### Common pitfalls
+
+1. **Missing `self.run` guards** - If your callback sets `self.run = False` in `before_fit` (e.g., during `lr_find`), every other event method must check `if not self.run: return` before accessing state created in `before_fit`.
+
+2. **Accessing uninitialized state** - If `before_fit` creates `self.writer` or `self.hps`, ensure `after_batch`/`after_epoch` only access them after confirming initialization succeeded.
+
+3. **Order conflicts with `MixedPrecision`** - The `MixedPrecision` callback enters an autocast context in `before_batch` and exits in `after_loss`. Any callback that modifies the loss between these events must account for the precision state.
+
+4. **`store_attr` with explicit names** - When calling `store_attr('a, b, c')` with an explicit list, parameters not in the list are silently dropped. Always verify that every parameter your methods reference is included.
+
+### Testing callbacks
+
+Write tests that exercise your callback in isolation using `ShortEpochCallback` to limit training:
+
+```python
+learn = synth_learner(cbs=[MyCallback(), ShortEpochCallback()])
+learn.fit(1)
+# assert on state your callback should have set
+```
+
 ## PR Checklist
 
 Before marking your pull request as ready for review, verify the following:
