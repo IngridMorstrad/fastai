@@ -573,3 +573,168 @@ When working with the fastai codebase, you may encounter confusing errors. This 
 **Cause**: By default, `learn.save()` and `learn.load()` do not include optimizer state. The `with_opt` parameter defaults to `False`.
 
 **Fix**: Use `learn.save('model', with_opt=True)` and `learn.load('model', with_opt=True)` to persist and restore optimizer state alongside model weights.
+
+## Debugging Training Issues
+
+When a training run fails or produces unexpected results, use these patterns to isolate the problem efficiently.
+
+### Narrowing down callback failures
+
+Callbacks are the most common source of subtle bugs because they interact with many parts of the training state. To determine whether a callback is causing an issue:
+
+```python
+# Remove all optional callbacks and add them back one at a time
+learn = Learner(dls, model, cbs=[])  # no optional callbacks
+learn.fit(1)  # does this work?
+
+# Add suspect callback
+learn = Learner(dls, model, cbs=[SuspectCallback()])
+learn.fit(1)  # does it break now?
+```
+
+If the problem only appears during validation, use `run_valid=False` on your callback to confirm:
+
+```python
+class DebugCallback(Callback):
+    run_valid = False  # skip validation events
+    def after_batch(self):
+        # your debug logic here
+        pass
+```
+
+### Inspecting training state at each event
+
+Use a lightweight probe callback to log the training state at specific events without disrupting the loop:
+
+```python
+class ProbeCallback(Callback):
+    order = 999  # run last to see final state
+    def __init__(self, events=('after_batch',)):
+        self.events = events
+        self.log = []
+
+    def __call__(self, event_name):
+        if event_name in self.events:
+            self.log.append({
+                'event': event_name,
+                'iter': getattr(self.learn, 'train_iter', None),
+                'loss': float(self.learn.loss) if self.learn.loss is not None else None,
+                'lr': self.learn.opt.hypers[-1]['lr'] if self.learn.opt else None,
+            })
+        super().__call__(event_name)
+```
+
+### Diagnosing NaN/Inf losses
+
+NaN losses typically originate from one of three sources:
+
+1. **Learning rate too high** - Verify with `learn.lr_find()` before training.
+2. **Numerical overflow in mixed precision** - Temporarily disable fp16 to confirm: `learn.to_fp32()`.
+3. **Bad data samples** - Use `SkipItemException` in a custom `after_item` to filter problematic inputs:
+
+```python
+@DataLoader
+def after_item(self, x):
+    if torch.isnan(x[0]).any() or torch.isinf(x[0]).any():
+        raise SkipItemException
+    return x
+```
+
+To pinpoint exactly which batch causes the NaN:
+
+```python
+class NaNDetector(Callback):
+    order = 9999
+    def after_pred(self):
+        if torch.isnan(self.pred).any():
+            print(f"NaN in pred at iter {self.train_iter}, batch shapes: {[x.shape for x in self.xb]}")
+            raise CancelFitException
+    def after_loss(self):
+        if torch.isnan(self.loss):
+            print(f"NaN loss at iter {self.train_iter}, pred range: [{self.pred.min():.4f}, {self.pred.max():.4f}]")
+            raise CancelFitException
+```
+
+### Debugging learning rate schedules
+
+When a schedule behaves unexpectedly, record and plot the actual LR values applied at each step:
+
+```python
+learn.fit_one_cycle(5, 1e-3)
+learn.recorder.plot_sched()  # visual confirmation of the schedule
+```
+
+For custom schedules, verify the schedule function in isolation before training:
+
+```python
+sched_fn = combined_cos(0.25, 1e-4, 1e-2, 1e-5)
+xs = torch.linspace(0, 1, 100)
+ys = [sched_fn(x) for x in xs]
+plt.plot(xs, ys)
+plt.title('LR schedule preview')
+```
+
+### Debugging data pipeline issues
+
+If your model trains but performs poorly, the data pipeline may be silently corrupting inputs. Verify the pipeline output visually:
+
+```python
+# Check raw data before transforms
+b = learn.dls.train.one_batch()
+learn.dls.train.show_batch(b, max_n=4)
+
+# Check that augmentations are reasonable
+learn.dls.train.show_batch(max_n=9, unique=True)  # same item, different augmentations
+```
+
+For text data, decode back to tokens to verify numericalization is correct:
+
+```python
+x, y = learn.dls.train.one_batch()
+print(learn.dls.train.decode((x[:1], y[:1])))
+```
+
+### Interpreting CUDA out-of-memory errors
+
+OOM errors during training usually mean the batch size or model is too large for available GPU memory. Quick fixes:
+
+1. **Reduce batch size**: `dls = DataLoaders(..., bs=bs//2)`
+2. **Use gradient accumulation**: `learn.fit(..., cbs=GradientAccumulation(n_acc=64))`
+3. **Enable mixed precision**: `learn.to_fp16()` (halves activation memory)
+4. **Use gradient checkpointing** for very deep models (trade compute for memory)
+
+To find the maximum batch size that fits:
+
+```python
+from fastai.callback.training import ShortEpochCallback
+for bs in [128, 64, 32, 16, 8]:
+    try:
+        dls = get_dls(bs=bs)
+        learn = Learner(dls, model)
+        learn.fit(1, cbs=ShortEpochCallback(pct=0.01))
+        print(f"bs={bs} fits in memory")
+        break
+    except RuntimeError as e:
+        if 'out of memory' in str(e):
+            torch.cuda.empty_cache()
+            print(f"bs={bs} OOM")
+        else:
+            raise
+```
+
+### Using `Learner.get_preds` for debugging
+
+`get_preds` is useful for examining model outputs on validation data without running a full training loop:
+
+```python
+# Get predictions, targets, and losses
+preds, targs, losses = learn.get_preds(with_loss=True)
+
+# Check prediction distribution
+print(f"Pred range: [{preds.min():.4f}, {preds.max():.4f}]")
+print(f"Mean loss: {losses.mean():.4f}, Max loss: {losses.max():.4f}")
+
+# Find worst predictions
+top_losses, top_idxs = losses.topk(10)
+print(f"Top 10 loss indices: {top_idxs.tolist()}")
+```

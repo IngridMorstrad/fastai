@@ -19,6 +19,11 @@ This file tracks known bugs and issues in the fastai library. If you encounter a
 - `Numericalize.setups` filters `o2i` with `if v != 'xxfake'`, but `make_vocab` generates tokens named `xxfake0`, `xxfake1`, etc., so the filter never matches and padding tokens get valid indices instead of mapping to 0 (unknown) (`fastai/text/data.py`)
 - `LRFinder.after_fit` accesses `self.tmp_p` unconditionally, but if `before_fit` raises an exception before setting `self.tmp_d`/`self.tmp_p` (e.g., path creation fails), `after_fit` raises a secondary `AttributeError` that masks the original error (`fastai/callback/schedule.py`)
 - `_download_image_inner` catches download exceptions but uses a bare f-string expression (`f"Couldn't download {url}."`) as the handler body, which is a no-op; errors are silently swallowed with no logging or warning (`fastai/vision/utils.py`)
+- `combine_scheds` uses `assert sum(pcts) == 1.` with strict floating-point equality, so valid inputs like `[0.3, 0.7]` can fail the assertion due to IEEE 754 rounding (`fastai/callback/schedule.py`)
+- `ActivationStats.hook` calls `o.float()` after only guarding for `isinstance(o, tuple)`, so layers returning a plain list bypass the guard and crash with `AttributeError: 'list' object has no attribute 'float'` (`fastai/callback/hook.py`)
+- `ShowGraphCallback.after_epoch` computes `max(Tensor(val_losses))` without checking for an empty list, so if validation is skipped on the first epoch it raises `RuntimeError: operation does not have an identity` (`fastai/callback/progress.py`)
+- `Learner._set_device` calls `next(self.model.parameters())` without a fallback, so models with zero parameters (e.g., buffer-only modules) raise unhandled `StopIteration` (`fastai/learner.py`)
+- `NonNativeMixedPrecision.before_step` increments `self.count` and multiplies `self.loss_scale` after `scale_wait` batches even when overflow is detected in the same call, causing premature scale increases following overflow events (`fastai/callback/fp16.py`)
 
 ## Fixed
 
