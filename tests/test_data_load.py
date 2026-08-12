@@ -7,7 +7,6 @@ device placement, and edge cases.
 import sys
 import os
 import pytest
-import random
 
 # Ensure the repo root is on sys.path so sub-package imports resolve correctly.
 _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))

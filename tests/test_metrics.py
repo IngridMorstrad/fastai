@@ -12,7 +12,6 @@ HammingLossMulti, JaccardMulti).
 import sys
 import os
 import math
-import pytest
 import torch
 import numpy as np
 from types import SimpleNamespace

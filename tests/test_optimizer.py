@@ -6,7 +6,6 @@ momentum_step, debias, step_stat), freeze/unfreeze, state management.
 """
 import sys
 import os
-import pytest
 import torch
 import torch.nn as nn
 
