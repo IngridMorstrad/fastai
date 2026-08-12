@@ -235,6 +235,9 @@ class TestShowGradcam:
         img = torch.randn(3, 32, 32)
         fig = show_gradcam(model, img, class_idx=None)
         assert isinstance(fig, plt.Figure)
+        # Verify title shows a numeric class index, not 'None'
+        title = fig.axes[0].get_title()
+        assert 'None' not in title, f"Title should show detected class index, got: {title}"
         plt.close(fig)
 
     def test_invalid_method_raises(self):
