@@ -396,3 +396,93 @@ def test_custom_callback_fires():
 - **Global state leakage**: Each test should create its own `Learner` and data. Never rely on objects created in a previous test.
 - **File cleanup**: If your test writes files (model exports, logs), use `tmp_path` (pytest) or Python's `tempfile` module and clean up in a `finally` block or fixture teardown.
 - **Mocking external services**: If a feature calls an external API (e.g. Weights & Biases logging), mock the network call rather than requiring credentials in CI.
+
+## Performance Profiling and Benchmarking
+
+When contributing performance-sensitive code (data loading, augmentation transforms, model architectures, training loop changes), you should profile and benchmark your changes to demonstrate they do not introduce regressions and to quantify improvements.
+
+### Profiling a training step
+
+Use PyTorch's built-in profiler to identify bottlenecks in the forward/backward pass:
+
+```python
+from torch.profiler import profile, ProfilerActivity, schedule
+
+learn = cnn_learner(dls, resnet18, metrics=accuracy)
+
+with profile(
+    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+    schedule=schedule(wait=1, warmup=1, active=3),
+    on_trace_ready=torch.profiler.tensorboard_trace_handler('./profiler_logs'),
+    record_shapes=True,
+    with_stack=True,
+) as prof:
+    for i, batch in enumerate(dls.train):
+        learn.one_batch(i, batch)
+        prof.step()
+        if i >= 5: break
+
+# Print top time-consuming operations
+print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=15))
+```
+
+### Profiling data loading
+
+Data pipeline bottlenecks are common. Measure whether training is data-bound or compute-bound:
+
+```python
+import time
+
+def benchmark_dataloader(dl, n_batches=50):
+    """Time data loading independently of model computation."""
+    start = time.perf_counter()
+    for i, batch in enumerate(dl):
+        if i >= n_batches: break
+    elapsed = time.perf_counter() - start
+    print(f"{n_batches} batches in {elapsed:.2f}s ({elapsed/n_batches*1000:.1f}ms/batch)")
+    return elapsed
+
+benchmark_dataloader(dls.train)
+```
+
+If data loading time exceeds forward+backward time, consider increasing `num_workers`, simplifying transforms, or caching preprocessed data.
+
+### Benchmarking before and after your change
+
+Always compare against the base branch to prove your change helps (or at least does not hurt):
+
+1. **Checkout the base branch** and run your benchmark script, recording the numbers.
+2. **Checkout your feature branch** and run the same script under identical conditions (same hardware, same batch size, same seed).
+3. **Run at least 3 trials** of each to account for variance. Report the median and the range.
+4. **Include the comparison** in your PR description using a table:
+
+```markdown
+| Metric | Base (median) | PR (median) | Change |
+|--------|---------------|-------------|--------|
+| Train step (ms) | 142 | 128 | -9.8% |
+| Peak GPU mem (MB) | 3420 | 3380 | -1.2% |
+| DataLoader (ms/batch) | 18.3 | 12.1 | -33.9% |
+```
+
+### Memory profiling
+
+For changes that affect GPU memory usage:
+
+```python
+import torch
+
+torch.cuda.reset_peak_memory_stats()
+learn.fit(1)
+peak_mb = torch.cuda.max_memory_allocated() / 1024**2
+print(f"Peak GPU memory: {peak_mb:.1f} MB")
+```
+
+Report peak memory alongside throughput so reviewers can evaluate the tradeoff.
+
+### Tips for reliable benchmarks
+
+- **Warm up** the GPU with a few batches before timing. The first batch is always slower due to CUDA kernel compilation and memory allocation.
+- **Pin your environment**: report the GPU model, CUDA version, PyTorch version, and batch size alongside any numbers.
+- **Disable progress bars and logging** during benchmarks (`with learn.no_bar(), learn.no_logging()`) to avoid I/O overhead contaminating measurements.
+- **Use `torch.cuda.synchronize()`** before taking timestamps when measuring GPU operations, since CUDA calls are asynchronous by default.
+- **Avoid running on shared machines** where other processes may contend for GPU or CPU resources. If unavoidable, run more trials and report the variance.

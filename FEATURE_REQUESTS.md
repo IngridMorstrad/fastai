@@ -11,6 +11,7 @@ For discussions about features before implementation, please use the [fastai for
 - Add multi-GPU `DataLoaders.distributed()` method that automatically shards data across GPUs with balanced partition sizes and deterministic ordering for reproducibility
 - Add a `DataLoaders.from_registry(name)` method that downloads and caches popular benchmark datasets (CIFAR, MNIST, ImageNet-1k subsets, GLUE) with canonical train/val/test splits in one call
 - Add a DataLoader option for automatic class-balanced sampling that reweights batches to handle heavily imbalanced classification datasets without manual oversampling
+- Add a `DataLoaders.summary()` method that prints dataset statistics (sample count, class distribution, tensor shapes, memory footprint, and transform chain) in a formatted table to help users verify their pipeline before training
 
 ## Training
 
@@ -20,6 +21,7 @@ For discussions about features before implementation, please use the [fastai for
 - Add a `Learner.prune(method='structured')` method that applies structured weight pruning with an integrated fine-tuning schedule to recover accuracy after sparsification
 - Add `Learner.fit_with_restarts()` implementing cosine annealing with warm restarts (SGDR), automatically adjusting cycle length and learning rate bounds across multiple restart cycles
 - Add a built-in gradient accumulation wrapper that transparently simulates larger batch sizes across multiple forward passes for memory-constrained GPUs
+- Add a `Learner.hyperband()` method that implements the Hyperband early-stopping scheduler to efficiently search over hyperparameter configurations by dynamically allocating budget to promising trials
 
 ## Vision
 
@@ -27,6 +29,7 @@ For discussions about features before implementation, please use the [fastai for
 - [DONE] Add built-in GradCAM/Grad-CAM++ visualization support to highlight class-discriminative regions in image predictions -- implemented in `fastai.vision.gradcam`
 - Add a `vision_learner.ssl_pretrain()` method that supports self-supervised pretraining strategies (SimCLR, BYOL, DINO) on unlabeled image datasets before fine-tuning
 - Add a built-in test-time augmentation (TTA) pipeline that supports configurable augmentation policies and ensembling strategies beyond simple averaging
+- Add a `vision_learner.from_timm(model_name)` factory method that wraps any timm model with fastai-compatible head surgery, enabling direct access to the full timm model zoo without manual architecture adaptation
 
 ## Text
 
@@ -38,6 +41,7 @@ For discussions about features before implementation, please use the [fastai for
 
 - Allow incremental/online learning for tabular models so new data can be incorporated without full retraining
 - Add `TabularLearner.counterfactual(row, target_class)` method that generates minimal feature perturbations to flip the prediction, helping users understand decision boundaries
+- Add a `TabularLearner.detect_drift(new_df)` method that compares feature distributions between training data and new incoming data, flagging statistically significant shifts that may degrade model accuracy
 
 ## Callbacks
 
@@ -51,6 +55,7 @@ For discussions about features before implementation, please use the [fastai for
 
 - Provide a `Learner.to_api()` convenience method that generates a minimal FastAPI/Flask prediction endpoint from a trained model
 - Add a `Learner.benchmark()` method that profiles inference latency, throughput, and memory usage across configurable batch sizes to help users choose optimal deployment settings
+- Add a `Learner.to_torchscript(sample_input)` method that exports the model via TorchScript tracing with automatic input shape inference, producing a portable artifact for deployment in C++ or mobile runtimes
 
 ## Documentation & Tooling
 
