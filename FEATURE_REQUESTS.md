@@ -18,7 +18,7 @@ For discussions about features before implementation, please use the [fastai for
 - Support automatic mixed-precision gradient scaling configuration per parameter group to allow selective full-precision training of sensitive layers (e.g. batch norm)
 - [DONE] Add a checkpoint averaging callback that maintains the top-K model checkpoints by validation loss and produces a weight-averaged model at the end of training for improved generalization -- implemented as `CheckpointAveragingCallback`
 - Add a `Learner.prune(method='structured')` method that applies structured weight pruning with an integrated fine-tuning schedule to recover accuracy after sparsification
-- Add `Learner.fit_with_restarts()` implementing cosine annealing with warm restarts (SGDR), automatically adjusting cycle length and learning rate bounds across multiple restart cycles
+- [DONE] Add `Learner.fit_with_restarts()` implementing cosine annealing with warm restarts (SGDR), automatically adjusting cycle length and learning rate bounds across multiple restart cycles -- already implemented as `Learner.fit_sgdr()` in `fastai/callback/schedule.py`
 - Add a built-in gradient accumulation wrapper that transparently simulates larger batch sizes across multiple forward passes for memory-constrained GPUs
 
 ## Vision
