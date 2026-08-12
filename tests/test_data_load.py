@@ -717,3 +717,36 @@ class TestDataLoaderIntegration:
         batches = list(dl)
         assert len(batches) == 1
         assert batches[0].shape == (5,)
+
+
+# ============================================================
+# Tests for DataLoader.create_item
+# ============================================================
+
+class TestDataLoaderCreateItem:
+    """Tests for DataLoader.create_item method."""
+
+    def test_create_item_indexed(self):
+        """With indexed dataset, create_item should return dataset[s]."""
+        ds = [10, 20, 30, 40, 50]
+        dl = DataLoader(ds, bs=2)
+        assert dl.create_item(0) == 10
+        assert dl.create_item(2) == 30
+        assert dl.create_item(4) == 50
+
+    def test_create_item_non_indexed(self):
+        """With non-indexed dataset, create_item(None) should use the iterator."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False)
+        dl.it = iter([10, 20, 30])
+        assert dl.create_item(None) == 10
+        assert dl.create_item(None) == 20
+        assert dl.create_item(None) == 30
+
+    def test_create_item_non_indexed_raises_on_numeric_index(self):
+        """Non-indexed dataset should raise IndexError when given a numeric index."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False)
+        dl.it = iter([10, 20, 30])
+        with pytest.raises(IndexError, match="Cannot index an iterable dataset"):
+            dl.create_item(0)

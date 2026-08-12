@@ -2,7 +2,7 @@
 
 Line counts for all Python files in the repository, generated with `find . -name "*.py" -not -path "*/__pycache__/*" | sort | xargs wc -l`.
 
-Last verified: 2026-08-10
+Last verified: 2026-08-12
 
 ```
      24 ./dev_nbs/course/crappify.py
@@ -100,9 +100,8 @@ Last verified: 2026-08-10
       0 ./tests/__init__.py
     344 ./tests/test_checkpoint_averaging.py
     370 ./tests/test_collab.py
-    640 ./tests/test_data_loader.py
     700 ./tests/test_dataloader.py
-    719 ./tests/test_data_load.py
+    752 ./tests/test_data_load.py
     699 ./tests/test_data_transforms.py
     296 ./tests/test_gradcam.py
     475 ./tests/test_layers.py
@@ -114,5 +113,5 @@ Last verified: 2026-08-10
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  25647 total
+  25040 total
 ```
