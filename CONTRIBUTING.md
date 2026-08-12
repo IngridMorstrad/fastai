@@ -458,6 +458,59 @@ def test_custom_callback_fires():
 - **File cleanup**: If your test writes files (model exports, logs), use `tmp_path` (pytest) or Python's `tempfile` module and clean up in a `finally` block or fixture teardown.
 - **Mocking external services**: If a feature calls an external API (e.g. Weights & Biases logging), mock the network call rather than requiring credentials in CI.
 
+## Troubleshooting nbdev Export Errors
+
+Since fastai's source of truth lives in notebooks, the `nbdev_export` step is a common source of CI failures. Below are the most frequent issues and how to resolve them.
+
+### "Notebook and script are out of sync"
+
+This happens when you edit a `.py` file in `fastai/` directly instead of editing the corresponding notebook. The CI runs `nbdev_export` and detects a diff.
+
+**Fix:** Never hand-edit auto-generated `.py` files. Instead:
+1. Find the source notebook (e.g., `fastai/data/load.py` comes from `nbs/50_data.load.ipynb`).
+2. Make your change in the notebook cell tagged with `#|export`.
+3. Run `nbdev_export` to regenerate the `.py` file.
+4. Commit both the notebook and the regenerated `.py` file.
+
+### "Cell has no matching export module"
+
+This means you added `#|export` to a cell but the notebook's `#|default_exp` directive does not point to a valid module path.
+
+**Fix:** Check the first code cell of the notebook for a line like `#|default_exp data.load`. Make sure it matches the directory structure under `fastai/`.
+
+### "_modidx.py is stale"
+
+The module index file (`fastai/_modidx.py`) maps functions to their source notebooks for documentation. If you add or rename an exported symbol, this file needs regenerating.
+
+**Fix:** Run `nbdev_export` from the repository root. It regenerates `_modidx.py` automatically. Never edit this file by hand.
+
+### "Import not found" after adding a new module
+
+When you create a new notebook that exports to a new module, the package might not automatically discover it.
+
+**Fix:**
+1. Ensure the new module's parent package has an `__init__.py`.
+2. Add the new module to the relevant `all.py` file (e.g., `fastai/data/all.py`) if it should be part of the public API.
+3. Run `nbdev_export` to populate `_modidx.py`.
+
+### "Tests pass locally but CI fails on nbdev_export"
+
+Local environments sometimes have stale `.py` files from a previous export. CI always starts from the committed state.
+
+**Fix:**
+1. Run `nbdev_export` fresh.
+2. Run `git diff` to see if any `.py` files changed.
+3. If they did, commit the regenerated files. Your local copy was out of date.
+
+### Quick reference commands
+
+| Task | Command |
+|------|---------|
+| Export notebooks to `.py` modules | `nbdev_export` |
+| Sync library changes back to notebooks | `nbdev_update` |
+| Run all notebook tests | `nbdev_test` |
+| Check for notebook/library drift | `nbdev_diff` |
+| Install git hooks for notebook cleanup | `nbdev_install_hooks` |
 ## Troubleshooting Common Issues
 
 When working with the fastai codebase, you may encounter confusing errors. This section documents common issues and their solutions.
