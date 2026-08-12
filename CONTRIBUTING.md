@@ -131,6 +131,66 @@ If you'd like to learn the nbdev commands available and more about the project, 
 * Docs are automatically created from the notebooks in the `/nbs` directory.
 * To switch the `docs` submodule to ssh, `cd docs && git remote set-url origin git@github.com:fastai/fastai-docs.git`
 
+## Code Quality and Testing
+
+### Identifying Dead Code
+
+Dead code is code that is defined but never actually used at runtime. Common examples in Python include:
+
+- **Unused imports**: modules or names imported at the top of a file but never referenced in the body.
+  ```python
+  # Bad: numpy is imported but never used
+  import numpy as np
+  import torch
+
+  def my_func(x):
+      return torch.relu(x)
+  ```
+  ```python
+  # Good: only import what you use
+  import torch
+
+  def my_func(x):
+      return torch.relu(x)
+  ```
+
+- **Unreferenced helper functions**: functions defined (often during iterative development) that no caller ever invokes.
+  ```python
+  # Bad: _old_helper is defined but never called anywhere
+  def _old_helper(x):
+      return x * 2
+
+  def compute(x):
+      return x + 1
+  ```
+
+To find unused imports, search for `import` lines whose imported names do not appear elsewhere in the file. Tools like `flake8` (with the F401 rule) or `pylint` can automate this detection.
+
+### Running Tests
+
+Run the full test suite from the repository root:
+
+```bash
+pytest tests/
+```
+
+To run a specific test file:
+
+```bash
+pytest tests/test_optimizer.py
+```
+
+To run a specific test class or method:
+
+```bash
+pytest tests/test_optimizer.py::TestSGD::test_basic_step
+```
+
+### Test File Conventions
+
+- Test files in `tests/` are **not** notebook-managed. Unlike files in `fastai/` (which are auto-generated from notebooks via `nbdev_export`), test files can be edited directly without breaking nbdev sync.
+- The `tests/conftest.py` file already adds the repository root to `sys.path`, so pytest can import `fastai` modules without needing a package install.
+- Tests mock heavy dependencies (PyTorch training loops, GPU ops) where possible, so many tests run without a full training environment.
 ## Understanding Callback Ordering and Interactions
 
 Callbacks are fastai's primary extension mechanism. Getting their `order` attribute and inter-callback dependencies right is essential for writing correct callbacks and diagnosing bugs.
