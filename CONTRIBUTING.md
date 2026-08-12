@@ -408,6 +408,104 @@ Removing unused code reduces maintenance burden and makes the codebase easier to
 - **Always run the test suite** after removing imports to confirm nothing breaks. Some imports may have side effects (e.g., registering a module) even if the imported name is never referenced explicitly.
 - **Update `REPO_LINE_SIZE.md`** with the new `wc -l` output after your changes, so the line count stays current.
 
+## Performance Profiling
+
+When contributing performance improvements or diagnosing slow training, use these profiling techniques to identify bottlenecks.
+
+### CPU profiling with cProfile
+
+Wrap the training call to identify Python-level hotspots:
+
+```python
+import cProfile, pstats
+
+with cProfile.Profile() as pr:
+    learn.fit(1)
+
+stats = pstats.Stats(pr)
+stats.sort_stats('cumulative')
+stats.print_stats(20)  # top 20 functions by cumulative time
+```
+
+### GPU profiling with PyTorch Profiler
+
+For GPU-bound workloads, use the built-in PyTorch profiler to find CUDA kernel bottlenecks:
+
+```python
+from torch.profiler import profile, ProfilerActivity, tensorboard_trace_handler
+
+with profile(
+    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+    on_trace_ready=tensorboard_trace_handler('./profiler_logs'),
+    record_shapes=True,
+    with_stack=True
+) as prof:
+    learn.fit(1)
+
+# Print a summary table sorted by CUDA time
+print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=15))
+```
+
+Open the trace in TensorBoard with `tensorboard --logdir=./profiler_logs` for a timeline view showing CPU/GPU overlap and idle gaps.
+
+### DataLoader profiling
+
+Data loading is often the hidden bottleneck. Measure it independently:
+
+```python
+import time
+
+dl = learn.dls.train
+start = time.perf_counter()
+for i, batch in enumerate(dl):
+    if i >= 10: break
+elapsed = time.perf_counter() - start
+print(f"10 batches loaded in {elapsed:.2f}s ({elapsed/10:.3f}s per batch)")
+```
+
+If data loading is slow:
+- Increase `num_workers` in the DataLoader (note: on macOS and Windows this is forced to 0)
+- Pre-resize images to training resolution on disk to avoid repeated decoding
+- Use `item_tfms` for per-item transforms and `batch_tfms` for GPU-accelerated batch transforms
+
+### Memory profiling
+
+Track GPU memory to diagnose OOM errors or find memory leaks:
+
+```python
+import torch
+
+# Before training
+torch.cuda.reset_peak_memory_stats()
+
+learn.fit(1)
+
+# After training
+peak_mb = torch.cuda.max_memory_allocated() / 1024**2
+print(f"Peak GPU memory: {peak_mb:.0f} MB")
+```
+
+For CPU memory, use `tracemalloc` from the standard library:
+
+```python
+import tracemalloc
+tracemalloc.start()
+
+learn.fit(1)
+
+current, peak = tracemalloc.get_traced_memory()
+print(f"Peak CPU memory: {peak / 1024**2:.0f} MB")
+tracemalloc.stop()
+```
+
+### Profiling guidelines for PRs
+
+When submitting a performance-related PR:
+1. Include before/after timing numbers with the hardware and batch size noted
+2. Profile on a reproducible setup (specify model, dataset size, and image dimensions)
+3. Show that the change does not regress accuracy by running at least one full training cycle
+4. If the optimization trades memory for speed (or vice versa), document the tradeoff
+
 ## Testing Best Practices
 
 Writing good tests for fastai requires understanding how the library uses notebooks, GPU resources, and dynamic dispatch. Follow these guidelines to write tests that are reliable, fast, and useful.
