@@ -717,3 +717,97 @@ class TestDataLoaderIntegration:
         batches = list(dl)
         assert len(batches) == 1
         assert batches[0].shape == (5,)
+
+
+# ============================================================
+# Tests for DataLoader.create_item
+# ============================================================
+
+class TestDataLoaderCreateItem:
+    """Tests for DataLoader.create_item method."""
+
+    def test_create_item_indexed(self):
+        """With indexed dataset, create_item returns dataset[s]."""
+        ds = [10, 20, 30, 40, 50]
+        dl = DataLoader(ds, bs=2, num_workers=0)
+        assert dl.create_item(0) == 10
+        assert dl.create_item(2) == 30
+        assert dl.create_item(4) == 50
+
+    def test_create_item_non_indexed(self):
+        """With non-indexed dataset, create_item(None) uses the iterator."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, num_workers=0, indexed=False)
+        dl.it = iter([10, 20, 30])
+        assert dl.create_item(None) == 10
+        assert dl.create_item(None) == 20
+        assert dl.create_item(None) == 30
+
+    def test_create_item_non_indexed_raises_on_numeric_index(self):
+        """Non-indexed dataset raises IndexError when given a numeric index."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, num_workers=0, indexed=False)
+        dl.it = iter([10, 20, 30])
+        with pytest.raises(IndexError, match="Cannot index an iterable dataset"):
+            dl.create_item(0)
+
+
+# ============================================================
+# Tests for DataLoader before_iter / after_iter callbacks
+# ============================================================
+
+class TestDataLoaderIterCallbacks:
+    """Tests for before_iter and after_iter callback hooks."""
+
+    def test_before_iter_called(self):
+        """before_iter is called at start of iteration."""
+        ds = list(range(4))
+        dl = DataLoader(ds, bs=2, num_workers=0)
+        called = []
+
+        def track_before_iter(x=None):
+            called.append("before_iter")
+            return x
+
+        dl.before_iter = track_before_iter
+        list(dl)
+        assert "before_iter" in called
+
+    def test_after_iter_called(self):
+        """after_iter is called at end of iteration."""
+        ds = list(range(4))
+        dl = DataLoader(ds, bs=2, num_workers=0)
+        called = []
+
+        def track_after_iter(x=None):
+            called.append("after_iter")
+            return x
+
+        dl.after_iter = track_after_iter
+        list(dl)
+        assert "after_iter" in called
+
+
+# ============================================================
+# Tests for SkipItemException during full iteration
+# ============================================================
+
+class TestSkipItemDuringIteration:
+    """Tests for SkipItemException filtering during full iteration."""
+
+    def test_skip_item_during_iteration(self):
+        """Items raising SkipItemException in after_item are filtered from output."""
+        dataset = list(range(10))
+        dl = DataLoader(dataset, bs=5, num_workers=0)
+
+        # Override after_item to skip even numbers
+        def skip_evens(x):
+            if x % 2 == 0:
+                raise SkipItemException()
+            return x
+
+        dl.after_item = skip_evens
+        batches = list(dl)
+        all_items = torch.cat(batches).tolist()
+        # Only odd numbers should remain
+        assert sorted(all_items) == [1, 3, 5, 7, 9]
