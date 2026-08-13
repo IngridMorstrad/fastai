@@ -54,3 +54,191 @@ def show_results(x:Tabular, y:Tabular, samples, outs, ctxs=None, max_n=10, **kwa
     df = x.all_cols[:max_n]
     for n in x.y_names: df[n+'_pred'] = y[n][:max_n].values
     display_df(df)
+
+# %%
+@patch
+def counterfactual(self:TabularLearner,
+    row:pd.Series,      # Input row to generate counterfactual for
+    target_class,       # Desired target class (index or label)
+    cont_weight:float=1.0, # Weight for continuous feature perturbation cost
+    cat_weight:float=1.0,  # Weight for categorical feature change cost
+    lr:float=0.1,       # Learning rate for gradient-based optimization of continuous features
+    max_iter:int=100,   # Maximum iterations for the optimization loop
+    cat_max_swap:int=None, # Maximum number of categorical features to swap (None = all)
+    verbose:bool=False  # Print progress during optimization
+):
+    """Generate a counterfactual explanation by finding minimal feature perturbations that flip the prediction to `target_class`.
+
+    Uses gradient-based optimization for continuous features and greedy search for categorical features.
+    Returns a tuple of (counterfactual_row, changes_dict) where changes_dict maps feature names to (original, new) value pairs.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    # Get the dataloader's processors and column info
+    dls = self.dls
+    cat_names = list(dls.cat_names)
+    cont_names = list(dls.cont_names)
+
+    # Resolve target_class to an integer index
+    if hasattr(dls, 'vocab'):
+        vocab = dls.vocab
+    elif hasattr(dls, 'categorize') and hasattr(dls.categorize, 'vocab'):
+        vocab = dls.categorize.vocab
+    else:
+        vocab = None
+
+    if vocab is not None and not isinstance(target_class, int):
+        target_idx = list(vocab).index(target_class)
+    else:
+        target_idx = int(target_class)
+
+    # Get initial prediction
+    dl = dls.test_dl(row.to_frame().T)
+    dl.dataset.conts = dl.dataset.conts.astype(np.float32)
+
+    # Extract processed tensors
+    batch = next(iter(dl))
+    x_cat_orig = batch[0].clone()  # (1, n_cat) long tensor
+    x_cont_orig = batch[1].clone().float() if len(cont_names) > 0 else None
+
+    self.model.eval()
+
+    # Phase 1: Optimize continuous features via gradient descent
+    best_cf_cont = x_cont_orig.clone() if x_cont_orig is not None else None
+    if x_cont_orig is not None and len(cont_names) > 0:
+        x_cont_opt = x_cont_orig.clone().requires_grad_(True)
+        optimizer = torch.optim.Adam([x_cont_opt], lr=lr)
+
+        for i in range(max_iter):
+            optimizer.zero_grad()
+            with torch.set_grad_enabled(True):
+                out = self.model(x_cat_orig, x_cont_opt)
+                # Loss: maximize probability of target class + minimize perturbation
+                if out.shape[-1] > 1:
+                    log_probs = F.log_softmax(out, dim=-1)
+                    cls_loss = -log_probs[0, target_idx]
+                else:
+                    # Regression or binary with single output
+                    cls_loss = (out[0, 0] - target_idx) ** 2
+                # L2 regularization on perturbation
+                perturb_loss = cont_weight * ((x_cont_opt - x_cont_orig) ** 2).sum()
+                loss = cls_loss + 0.01 * perturb_loss
+            loss.backward()
+            optimizer.step()
+
+            # Check if prediction flipped
+            with torch.no_grad():
+                pred = self.model(x_cat_orig, x_cont_opt)
+                if pred.shape[-1] > 1:
+                    if pred.argmax(dim=-1).item() == target_idx:
+                        if verbose: print(f'Continuous optimization converged at iteration {i+1}')
+                        break
+
+        best_cf_cont = x_cont_opt.detach().clone()
+
+    # Check if continuous perturbation alone flipped prediction
+    with torch.no_grad():
+        pred = self.model(x_cat_orig, best_cf_cont if best_cf_cont is not None else x_cont_orig)
+        if pred.shape[-1] > 1:
+            cont_flipped = pred.argmax(dim=-1).item() == target_idx
+        else:
+            cont_flipped = True  # For regression, always report result
+
+    # Phase 2: Greedy categorical feature swapping (if needed)
+    best_cf_cat = x_cat_orig.clone()
+    if not cont_flipped and len(cat_names) > 0:
+        max_swaps = cat_max_swap if cat_max_swap is not None else len(cat_names)
+        swaps_done = 0
+        for _ in range(max_swaps):
+            best_score = -float('inf')
+            best_cat_idx = -1
+            best_cat_val = -1
+
+            for ci in range(len(cat_names)):
+                cat_name = cat_names[ci]
+                # Get the number of categories for this feature
+                n_cats = self.model.embeds[ci].num_embeddings
+                orig_val = best_cf_cat[0, ci].item()
+
+                for val in range(n_cats):
+                    if val == orig_val:
+                        continue
+                    trial_cat = best_cf_cat.clone()
+                    trial_cat[0, ci] = val
+                    with torch.no_grad():
+                        out = self.model(trial_cat, best_cf_cont if best_cf_cont is not None else x_cont_orig)
+                        if out.shape[-1] > 1:
+                            score = out[0, target_idx].item()
+                        else:
+                            score = -((out[0, 0] - target_idx) ** 2).item()
+                    if score > best_score:
+                        best_score = score
+                        best_cat_idx = ci
+                        best_cat_val = val
+
+            if best_cat_idx >= 0:
+                best_cf_cat[0, best_cat_idx] = best_cat_val
+                swaps_done += 1
+
+                # Check if flipped
+                with torch.no_grad():
+                    out = self.model(best_cf_cat, best_cf_cont if best_cf_cont is not None else x_cont_orig)
+                    if out.shape[-1] > 1 and out.argmax(dim=-1).item() == target_idx:
+                        if verbose: print(f'Categorical swap converged after {swaps_done} swaps')
+                        break
+
+    # Build the counterfactual row by decoding back to original feature space
+    cf_row = row.copy()
+    changes = {}
+
+    # Decode continuous changes
+    if best_cf_cont is not None and len(cont_names) > 0:
+        # Get normalization stats from the dataloader's processors
+        procs = dls.train_ds.procs
+        norm = None
+        for p in procs:
+            if hasattr(p, 'means') and hasattr(p, 'stds'):
+                norm = p
+                break
+
+        cf_cont_np = best_cf_cont[0].numpy()
+        orig_cont_np = x_cont_orig[0].numpy()
+
+        for i, name in enumerate(cont_names):
+            if abs(cf_cont_np[i] - orig_cont_np[i]) > 1e-6:
+                # Inverse-transform to get original scale
+                if norm is not None and name in norm.means:
+                    new_val = cf_cont_np[i] * norm.stds[name] + norm.means[name]
+                    old_val = orig_cont_np[i] * norm.stds[name] + norm.means[name]
+                else:
+                    new_val = cf_cont_np[i]
+                    old_val = orig_cont_np[i]
+                cf_row[name] = new_val
+                changes[name] = (old_val, new_val)
+
+    # Decode categorical changes
+    if len(cat_names) > 0:
+        procs = dls.train_ds.procs
+        categorify = None
+        for p in procs:
+            if hasattr(p, 'classes'):
+                categorify = p
+                break
+
+        for i, name in enumerate(cat_names):
+            orig_code = x_cat_orig[0, i].item()
+            new_code = best_cf_cat[0, i].item()
+            if orig_code != new_code:
+                if categorify is not None and name in categorify.classes:
+                    cats = categorify.classes[name]
+                    # Code 0 is typically NaN/missing, actual categories start at index 1
+                    orig_label = cats[orig_code - 1] if 0 < orig_code <= len(cats) else f'code_{orig_code}'
+                    new_label = cats[new_code - 1] if 0 < new_code <= len(cats) else f'code_{new_code}'
+                else:
+                    orig_label = orig_code
+                    new_label = new_code
+                cf_row[name] = new_label
+                changes[name] = (orig_label, new_label)
+
+    return cf_row, changes
