@@ -212,10 +212,6 @@ def unsqueeze_(x, dim=-1, n=1):
     for _ in range(n): x.unsqueeze_(dim)
     return x
 
-# %% ../nbs/00_torch_core.ipynb 63
-def _fa_rebuild_tensor (cls, *args, **kwargs): return cls(torch._utils._rebuild_tensor_v2(*args, **kwargs))
-def _fa_rebuild_qtensor(cls, *args, **kwargs): return cls(torch._utils._rebuild_qtensor  (*args, **kwargs))
-
 # %% ../nbs/00_torch_core.ipynb 64
 def apply(func, x, *args, **kwargs):
     "Apply `func` recursively to `x`, passing on args"
@@ -406,14 +402,6 @@ class TensorBase(Tensor):
     def clone(self, *, memory_format=None):
         cls = type(self)
         return self.as_subclass(Tensor).clone(memory_format=memory_format).as_subclass(cls)
-
-    def new_empty(self, size, *, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False):
-        cls = type(self)
-        if _torch_version < _torch_113 and layout is None:
-            layout = torch.strided
-        if _torch_version < _torch_112:
-            return super().new_empty(size, dtype=dtype, layout=layout, device=device, pin_memory=pin_memory, requires_grad=requires_grad)
-        return self.as_subclass(Tensor).new_empty(size, dtype=dtype, layout=layout, device=device, pin_memory=pin_memory, requires_grad=requires_grad).as_subclass(cls)
 
     def new_empty(self, *size, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False):
         cls = type(self)
