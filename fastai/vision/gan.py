@@ -297,7 +297,7 @@ class GANDiscriminativeLR(Callback):
 
     def after_batch(self):
         "Put the LR back to its value if necessary."
-        if not self.learn.gan_trainer.gen_mode: self.learn.opt.set_hyper('lr', self.learn.opt.hypers[0]['lr']/self.mult_lr)
+        if not self.learn.gan_trainer.gen_mode and self.training: self.learn.opt.set_hyper('lr', self.learn.opt.hypers[0]['lr']/self.mult_lr)
 
 # %% ../../nbs/24_vision.gan.ipynb 34
 class InvisibleTensor(TensorBase):
