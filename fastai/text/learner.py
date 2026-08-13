@@ -166,6 +166,43 @@ class TextLearner(Learner):
         file = join_path_file(file, self.path/self.model_dir, ext='.pth')
         load_model_text(file, self.model, self.opt, device=device, **kwargs)
         return self
+    def summarize(self,
+        text:str, # Input text to summarize
+        max_length:int=100, # Maximum number of words in the summary
+        strategy:str='extractive' # Summarization strategy: 'extractive' selects key sentences
+    ) -> str:
+        "Summarize `text` using extractive method, selecting the most important sentences up to `max_length` words."
+        import re as _re
+        sentences = [s.strip() for s in _re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+        if not sentences: return text[:max_length] if len(text.split()) > max_length else text
+        if len(text.split()) <= max_length: return text
+        # Score sentences by: position (earlier = more important), length (prefer medium), and word overlap with full text
+        word_freq = {}
+        all_words = [w.lower() for w in text.split()]
+        for w in all_words: word_freq[w] = word_freq.get(w, 0) + 1
+        scored = []
+        for i, sent in enumerate(sentences):
+            words = sent.lower().split()
+            if not words: continue
+            # Position score: first and last sentences are more important
+            pos_score = 1.0 / (i + 1) + (0.5 if i == len(sentences) - 1 else 0)
+            # Frequency score: sum of word frequencies normalized by sentence length
+            freq_score = sum(word_freq.get(w, 0) for w in words) / len(words)
+            # Length score: prefer sentences that are not too short or too long
+            len_score = min(len(words), 20) / 20.0
+            scored.append((pos_score + freq_score + len_score, i, sent))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        # Select top sentences until max_length is reached, preserving original order
+        selected = []
+        current_length = 0
+        for score, idx, sent in scored:
+            sent_words = len(sent.split())
+            if current_length + sent_words > max_length and selected:
+                break
+            selected.append((idx, sent))
+            current_length += sent_words
+        selected.sort(key=lambda x: x[0])
+        return ' '.join(sent for _, sent in selected)
 
 # %% ../../nbs/37_text.learner.ipynb 26
 def decode_spec_tokens(tokens):
@@ -214,6 +251,45 @@ class LMLearner(TextLearner):
         tokens = [num.vocab[i] for i in idxs_all if num.vocab[i] not in [BOS, PAD]]
         sep = self.dls.train_ds.tokenizer.sep
         return sep.join(decoder(tokens))
+
+
+    def summarize(self,
+        text:str, # Input text to summarize
+        max_length:int=50, # Maximum number of words to generate in the summary
+        strategy:str='abstractive', # Strategy: 'abstractive' uses LM generation, 'extractive' uses sentence selection
+        temperature:float=0.7, # Sampling temperature for abstractive generation
+        min_p:float=None, # Minimum probability threshold for token selection
+        no_unk:bool=True, # Exclude unknown tokens from generation
+        no_bar:bool=True # Disable progress bar during generation
+    ) -> str:
+        "Summarize `text` using language model generation (abstractive) or fall back to extractive sentence selection."
+        if strategy == 'extractive':
+            return super().summarize(text, max_length=max_length, strategy='extractive')
+        # Abstractive: prompt the LM with text + summary cue, then generate
+        prompt = text.strip() + ' . In summary ,'
+        generated = self.predict(prompt, n_words=max_length, temperature=temperature,
+                                 min_p=min_p, no_unk=no_unk, no_bar=no_bar)
+        # Extract just the generated summary (after the prompt)
+        # The predict method returns the full text including prompt
+        summary_part = generated[len(prompt):].strip()
+        # Truncate at sentence boundary if possible
+        import re as _re
+        sent_ends = list(_re.finditer(r'[.!?]', summary_part))
+        if sent_ends:
+            last_end = sent_ends[-1].end()
+            # Find the last sentence end within our word budget
+            for match in sent_ends:
+                segment = summary_part[:match.end()]
+                if len(segment.split()) <= max_length:
+                    last_end = match.end()
+                else:
+                    break
+            summary_part = summary_part[:last_end].strip()
+        # Final word count trim
+        words = summary_part.split()
+        if len(words) > max_length:
+            summary_part = ' '.join(words[:max_length])
+        return summary_part if summary_part else super().summarize(text, max_length=max_length, strategy='extractive')
 
     @delegates(Learner.get_preds)
     def get_preds(self, concat_dim=1, **kwargs): return super().get_preds(concat_dim=1, **kwargs)
