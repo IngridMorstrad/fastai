@@ -136,3 +136,12 @@ def untar_data(
     "Download `url` using `FastDownload.get`"
     d = FastDownload(fastai_cfg(), module=fastai.data, archive=archive, data=data, base=base)
     return d.get(url, force=force_download, extract_key=c_key)
+
+# %% ../../nbs/04_data.external.ipynb 36
+_REGISTRY = {
+    'mnist': URLs.MNIST, 'mnist_sample': URLs.MNIST_SAMPLE, 'mnist_tiny': URLs.MNIST_TINY,
+    'cifar10': URLs.CIFAR, 'cifar100': URLs.CIFAR_100,
+    'imagenette': URLs.IMAGENETTE, 'imagenette_160': URLs.IMAGENETTE_160, 'imagenette_320': URLs.IMAGENETTE_320,
+    'imagewoof': URLs.IMAGEWOOF, 'imagewoof_160': URLs.IMAGEWOOF_160, 'imagewoof_320': URLs.IMAGEWOOF_320,
+    'imagewang': URLs.IMAGEWANG, 'imagewang_160': URLs.IMAGEWANG_160, 'imagewang_320': URLs.IMAGEWANG_320,
+}
