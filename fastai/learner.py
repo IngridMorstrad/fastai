@@ -220,8 +220,11 @@ class Learner(GetAttr):
         self._do_grad_opt()
 
     def _set_device(self, b):
-        model_device = next(self.model.parameters()).device
+        p = next(self.model.parameters(), None)
+        if p is None: p = next(self.model.buffers(), None)
         dls_device = getattr(self.dls, 'device', default_device())
+        if p is None: return to_device(b, dls_device)
+        model_device = p.device
         if model_device == dls_device: return to_device(b, dls_device)
         else: return to_device(b, model_device)
 
