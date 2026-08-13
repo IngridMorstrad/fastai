@@ -4,22 +4,6 @@ from torch.autograd import Variable
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 
 
-def convert_module(module, dtype):
-    """
-    Converts a module's immediate parameters and buffers to dtype.
-    """
-    for param in module.parameters(recurse=False):
-        if param is not None:
-            if param.data.dtype.is_floating_point:
-                param.data = param.data.to(dtype=dtype)
-            if param._grad is not None and param._grad.data.dtype.is_floating_point:
-                param._grad.data = param._grad.data.to(dtype=dtype)
-
-    for buf in module.buffers(recurse=False):
-        if buf is not None and buf.data.dtype.is_floating_point:
-            buf.data = buf.data.to(dtype=dtype)
-
-
 def convert_network(network, dtype):
     """
     Converts a network's parameters and buffers to dtype.
@@ -27,7 +11,15 @@ def convert_network(network, dtype):
     for module in network.modules():
         if isinstance(module, torch.nn.modules.batchnorm._BatchNorm) and module.affine is True:
             continue
-        convert_module(module, dtype)
+        for param in module.parameters(recurse=False):
+            if param is not None:
+                if param.data.dtype.is_floating_point:
+                    param.data = param.data.to(dtype=dtype)
+                if param._grad is not None and param._grad.data.dtype.is_floating_point:
+                    param._grad.data = param._grad.data.to(dtype=dtype)
+        for buf in module.buffers(recurse=False):
+            if buf is not None and buf.data.dtype.is_floating_point:
+                buf.data = buf.data.to(dtype=dtype)
         if isinstance(module, torch.nn.RNNBase) or isinstance(module, torch.nn.modules.rnn.RNNBase):
             module.flatten_parameters()
     return network

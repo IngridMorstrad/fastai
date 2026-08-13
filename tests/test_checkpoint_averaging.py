@@ -7,28 +7,7 @@ import unittest
 from unittest.mock import MagicMock
 import numpy as np
 
-from _tracker_test_helpers import tracker_module, FakeRecorder
-
-
-# ----- Helpers specific to checkpoint averaging -----
-
-class FakeModel:
-    """Mock model with state_dict and load_state_dict."""
-    def __init__(self, state_dict=None):
-        self._state_dict = state_dict or {'layer1.weight': np.array([1.0, 2.0]), 'layer1.bias': np.array([0.5])}
-
-    def state_dict(self):
-        return self._state_dict.copy()
-
-    def load_state_dict(self, state_dict):
-        self._state_dict = state_dict
-
-
-class FakeLearner:
-    """Mock learner."""
-    def __init__(self):
-        self.model = FakeModel()
-        self.save = MagicMock()
+from _tracker_test_helpers import tracker_module, FakeRecorder, FakeModel, FakeLearner
 
 
 # ----- Tests -----
@@ -65,25 +44,18 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         self.assertEqual(cb.save_averaged, False)
         self.assertEqual(cb.fname, 'averaged_model')
 
-    def test_comp_inferred_for_metric(self):
-        """Monitor without 'loss' or 'error' should use np.greater."""
-        cb = self._create_callback(monitor='accuracy')
-        self.assertEqual(cb.comp, np.greater)
-
-    def test_comp_inferred_for_loss(self):
-        """Monitor with 'loss' should use np.less."""
-        cb = self._create_callback(monitor='valid_loss')
-        self.assertEqual(cb.comp, np.less)
-
-    def test_comp_inferred_for_error(self):
-        """Monitor with 'error' should use np.less."""
-        cb = self._create_callback(monitor='error_rate')
-        self.assertEqual(cb.comp, np.less)
-
-    def test_custom_comp(self):
-        """Custom comp should override auto-detection."""
-        cb = self._create_callback(monitor='valid_loss', comp=np.greater)
-        self.assertEqual(cb.comp, np.greater)
+    def test_comp_inference(self):
+        """Comparator should be inferred from monitor name, or overridden by explicit comp."""
+        cases = [
+            ('accuracy', None, np.greater, "monitor without 'loss'/'error' uses np.greater"),
+            ('valid_loss', None, np.less, "monitor with 'loss' uses np.less"),
+            ('error_rate', None, np.less, "monitor with 'error' uses np.less"),
+            ('valid_loss', np.greater, np.greater, "explicit comp overrides auto-detection"),
+        ]
+        for monitor, comp, expected, desc in cases:
+            with self.subTest(desc=desc, monitor=monitor, comp=comp):
+                cb = self._create_callback(monitor=monitor, comp=comp)
+                self.assertEqual(cb.comp, expected)
 
     def test_before_fit_initializes_top_k(self):
         """before_fit should initialize top_k as empty list."""

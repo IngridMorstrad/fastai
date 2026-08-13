@@ -104,3 +104,23 @@ class FakeRecorder:
     def __init__(self, metric_names, values=None):
         self.metric_names = ['epoch'] + list(metric_names)
         self.values = values if values is not None else []
+
+
+class FakeModel:
+    """Mock model with state_dict and load_state_dict."""
+    def __init__(self, state_dict=None):
+        self._state_dict = state_dict or {'layer1.weight': np.array([1.0, 2.0]), 'layer1.bias': np.array([0.5])}
+
+    def state_dict(self):
+        return self._state_dict.copy()
+
+    def load_state_dict(self, state_dict):
+        self._state_dict = state_dict
+
+
+class FakeLearner:
+    """Mock learner."""
+    def __init__(self):
+        from unittest.mock import MagicMock
+        self.model = FakeModel()
+        self.save = MagicMock()

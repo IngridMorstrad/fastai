@@ -29,7 +29,7 @@
     215 ./fastai/data/load.py
     384 ./fastai/data/transforms.py
     224 ./fastai/distributed.py
-     72 ./fastai/fp16_utils.py
+     64 ./fastai/fp16_utils.py
      85 ./fastai/imports.py
       2 ./fastai/__init__.py
     174 ./fastai/interpret.py
@@ -92,7 +92,7 @@
      63 ./setup.py
      10 ./tests/conftest.py
       0 ./tests/__init__.py
-    344 ./tests/test_checkpoint_averaging.py
+    316 ./tests/test_checkpoint_averaging.py
     370 ./tests/test_collab.py
     640 ./tests/test_data_loader.py
     700 ./tests/test_dataloader.py
@@ -107,6 +107,6 @@
     765 ./tests/test_optimizer.py
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
-    106 ./tests/_tracker_test_helpers.py
-  25494 total
+    126 ./tests/_tracker_test_helpers.py
+  25478 total
 ```
