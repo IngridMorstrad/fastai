@@ -9,7 +9,7 @@ from ..basics import *
 # %% auto 0
 __all__ = ['annealer', 'sched_lin', 'sched_cos', 'sched_no', 'sched_exp', 'SchedLin', 'SchedCos', 'SchedNo', 'SchedExp',
            'SchedPoly', 'combine_scheds', 'combined_cos', 'ParamScheduler', 'LRFinder', 'valley', 'slide', 'minimum',
-           'steep', 'SuggestionMethod']
+           'steep', 'SuggestionMethod', 'MultiLossLRFinder']
 
 # %% ../../nbs/14_callback.schedule.ipynb 3
 _all_ = ['SuggestionMethod']
@@ -297,3 +297,76 @@ def lr_find(self:Learner, start_lr=1e-7, end_lr=10, num_it=100, stop_div=True, s
         return SuggestedLRs(*lrs)
 
     elif show_plot: self.recorder.plot_lr_find()
+
+# %% ../../nbs/14_callback.schedule.ipynb 94
+class MultiLossLRFinder(LRFinder):
+    "LR Finder that tracks multiple loss components for multi-task models"
+    def __init__(self, loss_funcs, start_lr=1e-7, end_lr=10, num_it=100, stop_div=True):
+        super().__init__(start_lr=start_lr, end_lr=end_lr, num_it=num_it, stop_div=stop_div)
+        store_attr('loss_funcs')
+
+    def before_fit(self):
+        super().before_fit()
+        self.multi_losses = {name: [] for name in self.loss_funcs.keys()}
+
+    def after_batch(self):
+        if not self.training: return
+        with torch.no_grad():
+            for name, func in self.loss_funcs.items():
+                self.multi_losses[name].append(float(func(self.learn.pred, *self.learn.yb)))
+        super().after_batch()
+
+    def after_fit(self):
+        self.learn.recorder.multi_losses = self.multi_losses
+        super().after_fit()
+
+# %% ../../nbs/14_callback.schedule.ipynb 95
+@patch
+def plot_multi_lr_find(self:Recorder, loss_names=None, skip_end=5, return_fig=True, **kwargs):
+    "Plot multiple losses from a multi-loss LR Finder test on the same chart"
+    if not hasattr(self, 'multi_losses'):
+        raise AttributeError("No multi_losses recorded. Run `learn.lr_find_multi_loss()` first.")
+    lrs = self.lrs if skip_end == 0 else self.lrs[:-skip_end]
+    fig, ax = plt.subplots(1, 1)
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    names = loss_names or list(self.multi_losses.keys())
+    for i, name in enumerate(names):
+        if name not in self.multi_losses:
+            raise KeyError(f"Loss '{name}' not found in recorded multi_losses.")
+        losses = self.multi_losses[name] if skip_end == 0 else self.multi_losses[name][:-skip_end]
+        ax.plot(lrs[:len(losses)], losses, label=name, c=colors[i % len(colors)])
+    ax.set_ylabel("Loss")
+    ax.set_xlabel("Learning Rate")
+    ax.set_xscale('log')
+    ax.legend(loc='best')
+    ax.set_title("Multi-Loss LR Finder")
+
+# %% ../../nbs/14_callback.schedule.ipynb 96
+@patch
+def lr_find_multi_loss(self:Learner, loss_funcs, start_lr=1e-7, end_lr=10, num_it=100, stop_div=True,
+                       show_plot=True, suggest_funcs=(SuggestionMethod.Valley)):
+    "Run LR finder while tracking multiple loss components for multi-task models"
+    n_epoch = num_it//len(self.dls.train) + 1
+    cb = MultiLossLRFinder(loss_funcs=loss_funcs, start_lr=start_lr, end_lr=end_lr, num_it=num_it, stop_div=stop_div)
+    with self.no_logging(): self.fit(n_epoch, cbs=cb)
+    if suggest_funcs is not None:
+        lrs, losses = tensor(self.recorder.lrs[num_it//10:-5]), tensor(self.recorder.losses[num_it//10:-5])
+        nan_idxs = torch.nonzero(torch.isnan(losses.view(-1)))
+        if len(nan_idxs) > 0:
+            drop_idx = min(nan_idxs)
+            lrs = lrs[:drop_idx]
+            losses = losses[:drop_idx]
+        _suggestions, nms = [], []
+        for func in tuplify(suggest_funcs):
+            nms.append(func.__name__ if not isinstance(func, partial) else func.func.__name__)
+            _suggestions.append(func(lrs, losses, num_it))
+
+        SuggestedLRs = collections.namedtuple('SuggestedLRs', nms)
+        lrs_out, pnts = [], []
+        for lr, pnt in _suggestions:
+            lrs_out.append(lr)
+            pnts.append(pnt)
+        if show_plot: self.recorder.plot_multi_lr_find()
+        return SuggestedLRs(*lrs_out)
+
+    elif show_plot: self.recorder.plot_multi_lr_find()
