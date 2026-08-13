@@ -60,6 +60,11 @@ def load_model(file, model, opt, with_opt=True, device=None, strict=True, **torc
             if with_opt: warn("Could not load the optimizer state.")
     elif with_opt: warn("Saved file doesn't contain an optimizer state.")
 
+# %% ../nbs/13a_learner.ipynb 19
+def _try_concat(o):
+    try:    return torch.cat(o)
+    except: return sum([L(o_[i,:] for i in range_of(o_)) for o_ in o], L())
+
 # %% ../nbs/13a_learner.ipynb 20
 _before_epoch = [event.before_fit, event.before_epoch]
 _after_epoch  = [event.after_epoch, event.after_fit]
@@ -680,3 +685,34 @@ def tta(self:Learner, ds_idx=1, dl=None, n=4, item_tfms=None, batch_tfms=None, b
     if use_max: return torch.stack([preds, aug_preds], 0).max(0)[0],targs
     preds = (aug_preds,preds) if beta is None else torch.lerp(aug_preds, preds, beta)
     return preds,targs
+
+# %% ../nbs/13a_learner.ipynb 192
+@patch
+def export_logs(self:Learner, fname:str='logs', path:Path=None, fmt:str='json'):
+    "Write training metrics from `self.recorder` to JSON and/or CSV file(s)."
+    import json as json_mod, csv as csv_mod
+    path = Path(path) if path is not None else self.path
+    rec = self.recorder
+    # Determine which metric_names correspond to values
+    names = list(rec.metric_names[1:-1]) if getattr(rec, 'add_time', True) else list(rec.metric_names[1:])
+    records = []
+    for i, vals in enumerate(rec.values):
+        row = {'epoch': i}
+        for name, val in zip(names, vals):
+            row[name] = val.item() if hasattr(val, 'item') else val
+        records.append(row)
+    all_names = ['epoch'] + names
+    paths = []
+    if fmt in ('json', 'both'):
+        json_path = path/f'{fname}.json'
+        json_path.write_text(json_mod.dumps(records, indent=2))
+        paths.append(json_path)
+    if fmt in ('csv', 'both'):
+        csv_path = path/f'{fname}.csv'
+        with open(csv_path, 'w', newline='') as f:
+            writer = csv_mod.DictWriter(f, fieldnames=all_names)
+            writer.writeheader()
+            writer.writerows(records)
+        paths.append(csv_path)
+    return paths[0] if len(paths) == 1 else paths
+
