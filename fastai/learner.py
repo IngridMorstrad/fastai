@@ -60,6 +60,11 @@ def load_model(file, model, opt, with_opt=True, device=None, strict=True, **torc
             if with_opt: warn("Could not load the optimizer state.")
     elif with_opt: warn("Saved file doesn't contain an optimizer state.")
 
+# %% ../nbs/13a_learner.ipynb 19
+def _try_concat(o):
+    try:    return torch.cat(o)
+    except: return sum([L(o_[i,:] for i in range_of(o_)) for o_ in o], L())
+
 # %% ../nbs/13a_learner.ipynb 20
 _before_epoch = [event.before_fit, event.before_epoch]
 _after_epoch  = [event.after_epoch, event.after_fit]
@@ -680,3 +685,72 @@ def tta(self:Learner, ds_idx=1, dl=None, n=4, item_tfms=None, batch_tfms=None, b
     if use_max: return torch.stack([preds, aug_preds], 0).max(0)[0],targs
     preds = (aug_preds,preds) if beta is None else torch.lerp(aug_preds, preds, beta)
     return preds,targs
+
+# %% ../nbs/13a_learner.ipynb 193
+@patch
+def to_api(self:Learner, fname='app.py', framework='fastapi', port=8000):
+    "Generate a minimal prediction API endpoint script from a trained model"
+    model_path = self.path/'export.pkl'
+    if not model_path.exists(): self.export()
+    model_path_str = str(model_path.resolve())
+    if framework == 'fastapi':
+        code = (
+            'from fastai.learner import load_learner\n'
+            'from fastapi import FastAPI, UploadFile, File\n'
+            'from fastapi.responses import JSONResponse\n'
+            'import uvicorn\n'
+            '\n'
+            f'learn = load_learner("{model_path_str}")\n'
+            'app = FastAPI()\n'
+            '\n'
+            '@app.get("/")\n'
+            'def root(): return {"status": "ok", "model": "' + model_path_str + '"}\n'
+            '\n'
+            '@app.post("/predict")\n'
+            'async def predict(file: UploadFile = File(...)):\n'
+            '    data = await file.read()\n'
+            '    # Write temp file for prediction\n'
+            '    import tempfile, os\n'
+            '    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:\n'
+            '        tmp.write(data)\n'
+            '        tmp_path = tmp.name\n'
+            '    try:\n'
+            '        pred_class, pred_idx, probs = learn.predict(tmp_path)\n'
+            '        return JSONResponse({"prediction": str(pred_class), "index": int(pred_idx), "probabilities": probs.tolist()})\n'
+            '    finally:\n'
+            '        os.unlink(tmp_path)\n'
+            '\n'
+            f'if __name__ == "__main__": uvicorn.run(app, host="0.0.0.0", port={port})\n'
+        )
+    elif framework == 'flask':
+        code = (
+            'from fastai.learner import load_learner\n'
+            'from flask import Flask, request, jsonify\n'
+            '\n'
+            f'learn = load_learner("{model_path_str}")\n'
+            'app = Flask(__name__)\n'
+            '\n'
+            '@app.route("/", methods=["GET"])\n'
+            'def root(): return jsonify(status="ok", model="' + model_path_str + '")\n'
+            '\n'
+            '@app.route("/predict", methods=["POST"])\n'
+            'def predict():\n'
+            '    file = request.files["file"]\n'
+            '    import tempfile, os\n'
+            '    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:\n'
+            '        file.save(tmp)\n'
+            '        tmp_path = tmp.name\n'
+            '    try:\n'
+            '        pred_class, pred_idx, probs = learn.predict(tmp_path)\n'
+            '        return jsonify(prediction=str(pred_class), index=int(pred_idx), probabilities=probs.tolist())\n'
+            '    finally:\n'
+            '        os.unlink(tmp_path)\n'
+            '\n'
+            f'if __name__ == "__main__": app.run(host="0.0.0.0", port={port})\n'
+        )
+    else:
+        raise ValueError(f'Unsupported framework: {framework}. Choose "fastapi" or "flask".')
+    out_path = self.path/fname
+    out_path.write_text(code)
+    return out_path
+
