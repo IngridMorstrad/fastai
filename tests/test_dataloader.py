@@ -95,6 +95,13 @@ class TestFaCollate:
         assert "a" in result
         assert torch.equal(result["a"], torch.tensor([1.0, 2.0]))
 
+    def test_collate_scalar_tensors(self):
+        """Collating scalar tensors should stack them."""
+        items = [torch.tensor(1.0), torch.tensor(2.0), torch.tensor(3.0)]
+        result = fa_collate(items)
+        assert result.shape == (3,)
+        assert result.tolist() == [1.0, 2.0, 3.0]
+
 
 # ============================================================
 # Tests for fa_convert
@@ -646,6 +653,124 @@ class TestCollateError:
         e = RuntimeError("original error")
         # Should not raise since shapes match
         collate_error(e, batch)
+
+    def test_error_message_contains_shapes(self):
+        """The error message should include both shapes that differ."""
+        batch = [
+            (torch.zeros(3, 4),),
+            (torch.zeros(3, 5),),
+        ]
+        e = RuntimeError("collate failed")
+        with pytest.raises(RuntimeError) as exc_info:
+            try:
+                raise e
+            except RuntimeError:
+                collate_error(e, batch)
+        error_msg = str(exc_info.value)
+        assert 'torch.Size([3, 4])' in error_msg
+        assert 'torch.Size([3, 5])' in error_msg
+
+
+# ============================================================
+# Tests for DataLoader.create_item
+# ============================================================
+
+class TestDataLoaderCreateItem:
+    """Tests for DataLoader.create_item method."""
+
+    def test_create_item_indexed(self):
+        """With indexed dataset, create_item should return dataset[s]."""
+        ds = [10, 20, 30, 40, 50]
+        dl = DataLoader(ds, bs=2)
+        assert dl.create_item(0) == 10
+        assert dl.create_item(2) == 30
+        assert dl.create_item(4) == 50
+
+    def test_create_item_non_indexed(self):
+        """With non-indexed dataset, create_item(None) should use the iterator."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False)
+        dl.it = iter([10, 20, 30])
+        assert dl.create_item(None) == 10
+        assert dl.create_item(None) == 20
+        assert dl.create_item(None) == 30
+
+    def test_create_item_non_indexed_raises_on_numeric_index(self):
+        """Non-indexed dataset should raise IndexError when given a numeric index."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False)
+        dl.it = iter([10, 20, 30])
+        with pytest.raises(IndexError, match="Cannot index an iterable dataset"):
+            dl.create_item(0)
+
+
+# ============================================================
+# Tests for DataLoader.chunkify
+# ============================================================
+
+class TestDataLoaderChunkify:
+    """Tests for DataLoader.chunkify behavior."""
+
+    def test_chunkify_normal_mode(self):
+        """In normal mode (bs is set), chunkify should chunk items into batches."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=3)
+        chunks = list(dl.chunkify(iter(range(10))))
+        assert len(chunks) == 4  # [0,1,2], [3,4,5], [6,7,8], [9]
+        assert list(chunks[0]) == [0, 1, 2]
+        assert list(chunks[-1]) == [9]
+
+    def test_chunkify_prebatched_mode(self):
+        """In prebatched mode (bs=None), chunkify should pass through items unchanged."""
+        ds = [[1, 2, 3], [4, 5, 6]]
+        dl = DataLoader(ds, bs=None)
+        items = [100, 200, 300]
+        result = list(dl.chunkify(iter(items)))
+        assert result == [100, 200, 300]
+
+    def test_chunkify_with_drop_last(self):
+        """With drop_last=True, chunkify should drop incomplete final chunk."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=3, drop_last=True)
+        chunks = list(dl.chunkify(iter(range(10))))
+        assert len(chunks) == 3  # [0,1,2], [3,4,5], [6,7,8] - last [9] dropped
+        for chunk in chunks:
+            assert len(list(chunk)) == 3
+
+
+# ============================================================
+# Tests for DataLoader.shuffle_fn
+# ============================================================
+
+class TestDataLoaderShuffleFn:
+    """Tests for DataLoader.shuffle_fn method."""
+
+    def test_shuffle_fn_same_length(self):
+        """shuffle_fn should return a permutation of the same length."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, shuffle=True)
+        idxs = list(range(10))
+        shuffled = dl.shuffle_fn(idxs)
+        assert len(shuffled) == len(idxs)
+
+    def test_shuffle_fn_same_elements(self):
+        """shuffle_fn should contain all the same elements."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, shuffle=True)
+        idxs = list(range(10))
+        shuffled = dl.shuffle_fn(idxs)
+        assert sorted(shuffled) == sorted(idxs)
+
+    def test_shuffle_fn_produces_different_orders(self):
+        """shuffle_fn should produce different orderings on repeated calls (with randomization)."""
+        ds = list(range(100))
+        dl = DataLoader(ds, bs=2, shuffle=True)
+        idxs = list(range(100))
+        result1 = dl.shuffle_fn(idxs)
+        dl.randomize()
+        result2 = dl.shuffle_fn(idxs)
+        # With 100 elements, probability of same order is essentially 0
+        assert result1 != result2
 
 
 # ============================================================
