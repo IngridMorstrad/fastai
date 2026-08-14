@@ -152,7 +152,7 @@ def layer_info(learn, *xb):
         params, trainable, shape = '', '', ''
         same = any((isinstance(x[0], torch.Tensor) and x[0].shape[1:] == x[1].shape for x in zip(i, o)))
         shape = apply(lambda x: x.shape, o)
-        if hasattr(m, 'weight'): # non activation layer
+        if list(m.parameters(recurse=False)): # non activation layer
             params, trainable = total_params(m)
         return (type(m).__name__, params, trainable, shape, same)
             
