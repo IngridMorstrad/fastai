@@ -320,7 +320,7 @@ eu_langs = ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "ga", "h
             "it","lt","lv","mt","nl","pl","pt","ro","sk","sl","sv"] # all European langs
 
 # %% ../../nbs/30_text.core.ipynb 76
-class SentencePieceTokenizer():#TODO: pass the special tokens symbol to sp
+class SentencePieceTokenizer():
     "SentencePiece tokenizer for `lang`"
     def __init__(self, lang='en', special_toks=None, sp_model=None, vocab_sz=None, max_vocab_sz=30000,
                  model_type='unigram', char_coverage=None, cache_dir='tmp'):
@@ -356,7 +356,7 @@ class SentencePieceTokenizer():#TODO: pass the special tokens symbol to sp
             f"--input={raw_text_path} --vocab_size={vocab_sz} --model_prefix={self.cache_dir/'spm'}",
             f"--character_coverage={self.char_coverage} --model_type={self.model_type}",
             f"--unk_id={len(spec_tokens)} --pad_id=-1 --bos_id=-1 --eos_id=-1 --minloglevel=2",
-            f"--user_defined_symbols={','.join(spec_tokens)} --hard_vocab_limit=false"]))
+            f"--user_defined_symbols={','.join(spec_tokens)} --control_symbols={','.join(self.special_toks)} --hard_vocab_limit=false"]))
         raw_text_path.unlink()
         return self.cache_dir/'spm.model'
 
