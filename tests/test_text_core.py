@@ -7,12 +7,8 @@ lowercase, replace_space.
 These are pure string functions that only depend on `re` and `html` modules.
 We extract them by mocking the heavy fastai import chain, then test thoroughly.
 """
-import sys
-import os
 import re
 import html
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 
 # ============================================================

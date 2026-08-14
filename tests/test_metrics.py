@@ -9,14 +9,10 @@ RocAucBinary, ExplainedVariance, R2Score, PearsonCorrCoef, SpearmanCorrCoef),
 and multi-label metrics (F1ScoreMulti, PrecisionMulti, RecallMulti,
 HammingLossMulti, JaccardMulti).
 """
-import sys
-import os
 import math
 import torch
 import numpy as np
 from types import SimpleNamespace
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.metrics import (
     AccumMetric, ActivationType, skm_to_fastai,
