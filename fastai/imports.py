@@ -1,24 +1,22 @@
 import numpy as np
 
-import io,operator,sys,os,re,mimetypes,csv,itertools,json,shutil,glob,pickle,tarfile,collections
-import hashlib,itertools,types,inspect,functools,random,time,math,bz2,typing,numbers,string
-import multiprocessing,threading,urllib,tempfile,concurrent.futures,matplotlib,warnings,zipfile
+import io,operator,sys,os,re,mimetypes,csv,itertools,json,shutil,glob,pickle,collections
+import hashlib,itertools,types,inspect,functools,random,time,math,typing,numbers,string
+import multiprocessing,threading,tempfile,matplotlib,warnings
 
-from concurrent.futures import as_completed
 from functools import partial,reduce
-from itertools import starmap,dropwhile,takewhile,zip_longest
+from itertools import starmap,zip_longest
 from copy import copy,deepcopy
-from multiprocessing import Lock,Process,Queue,queues
+from multiprocessing import Lock
 from datetime import datetime
-from contextlib import redirect_stdout,contextmanager
+from contextlib import contextmanager
 from collections.abc import Iterable,Iterator,Generator,Sequence,MutableSequence,MutableMapping
 from typing import Union,Optional,TypeVar,Callable,Any
 from types import SimpleNamespace
 from pathlib import Path
 from collections import OrderedDict,defaultdict,Counter,namedtuple
 from enum import Enum,IntEnum
-from textwrap import TextWrapper
-from operator import itemgetter,attrgetter,methodcaller
+from operator import itemgetter,attrgetter
 from urllib.request import urlopen
 from numbers import Number, Real
 
