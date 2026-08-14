@@ -8,8 +8,8 @@ from ..basics import *
 
 # %% auto 0
 __all__ = ['annealer', 'sched_lin', 'sched_cos', 'sched_no', 'sched_exp', 'SchedLin', 'SchedCos', 'SchedNo', 'SchedExp',
-           'SchedPoly', 'combine_scheds', 'combined_cos', 'ParamScheduler', 'LRFinder', 'valley', 'slide', 'minimum',
-           'steep', 'SuggestionMethod']
+           'SchedPoly', 'combine_scheds', 'combined_cos', 'ParamScheduler', 'LRWarmupCallback', 'LRFinder', 'valley',
+           'slide', 'minimum', 'steep', 'SuggestionMethod']
 
 # %% ../../nbs/14_callback.schedule.ipynb 3
 _all_ = ['SuggestionMethod']
@@ -91,7 +91,38 @@ class ParamScheduler(Callback):
              "after_batch": "Record hyper-parameters of this batch",
              "after_fit": "Save the hyper-parameters in the recorder if there is one"}
 
-# %% ../../nbs/14_callback.schedule.ipynb 46
+# %% ../../nbs/14_callback.schedule.ipynb 40
+class LRWarmupCallback(Callback):
+    "Linearly or exponentially ramp the learning rate over `warmup_steps` initial steps to stabilize early training"
+    order,run_valid = 61,False
+
+    def __init__(self, warmup_steps, start_lr=0.0, mode='linear'):
+        assert mode in ('linear', 'exponential'), f"mode must be 'linear' or 'exponential', got '{mode}'"
+        self.warmup_steps = warmup_steps
+        self.start_lr = start_lr
+        self.mode = mode
+
+    def before_fit(self):
+        self.target_lrs = [pg['lr'] for pg in self.opt.hypers]
+        self._step = 0
+
+    def before_batch(self):
+        if self._step >= self.warmup_steps:
+            return
+        pct = self._step / self.warmup_steps
+        new_lrs = []
+        for target_lr in self.target_lrs:
+            if self.mode == 'linear':
+                new_lrs.append(self.start_lr + (target_lr - self.start_lr) * pct)
+            else:
+                # Exponential: start_lr * (target_lr / start_lr) ** pct
+                # Guard against start_lr=0 by using a small epsilon
+                _start = self.start_lr if self.start_lr > 0 else 1e-8
+                new_lrs.append(_start * (target_lr / _start) ** pct)
+        self.opt.set_hyper('lr', new_lrs)
+        self._step += 1
+
+# %% ../../nbs/14_callback.schedule.ipynb 47
 @patch
 def fit_one_cycle(self:Learner, n_epoch, lr_max=None, div=25., div_final=1e5, pct_start=0.25, wd=None,
                   moms=None, cbs=None, reset_opt=False, start_epoch=0):
