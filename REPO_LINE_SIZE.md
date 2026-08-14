@@ -93,20 +93,20 @@
      10 ./tests/conftest.py
       0 ./tests/__init__.py
     344 ./tests/test_checkpoint_averaging.py
-    370 ./tests/test_collab.py
+    366 ./tests/test_collab.py
     640 ./tests/test_data_loader.py
     700 ./tests/test_dataloader.py
     719 ./tests/test_data_load.py
-    699 ./tests/test_data_transforms.py
-    296 ./tests/test_gradcam.py
-    475 ./tests/test_layers.py
-    146 ./tests/test_lm_dataloader.py
-    334 ./tests/test_losses.py
-   1291 ./tests/test_metrics.py
+    695 ./tests/test_data_transforms.py
+    292 ./tests/test_gradcam.py
+    471 ./tests/test_layers.py
+    139 ./tests/test_lm_dataloader.py
+    330 ./tests/test_losses.py
+   1287 ./tests/test_metrics.py
     245 ./tests/test_multi_metric_early_stopping.py
-    765 ./tests/test_optimizer.py
-    573 ./tests/test_text_core.py
-    527 ./tests/test_torch_core.py
+    761 ./tests/test_optimizer.py
+    569 ./tests/test_text_core.py
+    523 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  25494 total
+  25451 total
 ```
