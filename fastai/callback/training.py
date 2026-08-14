@@ -9,7 +9,8 @@ from .progress import *
 from .fp16 import *
 
 # %% auto 0
-__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'set_bn_eval', 'BnFreeze']
+__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'set_bn_eval', 'BnFreeze',
+           'GradientNoiseCallback']
 
 # %% ../../nbs/18a_callback.training.ipynb 6
 class ShortEpochCallback(Callback):
@@ -57,3 +58,17 @@ class BnFreeze(Callback):
     "Freeze moving average statistics in all non-trainable batchnorm layers."
     def before_train(self):
         set_bn_eval(self.model)
+
+# %% ../../nbs/18a_callback.training.ipynb 35
+class GradientNoiseCallback(Callback):
+    "Add decayed Gaussian noise to gradients to help escape sharp minima"
+    order,run_valid = GradientClip.order,False
+    def __init__(self, eta:float=0.01, gamma:float=0.55): store_attr()
+    def before_fit(self): self.count = 0
+    def before_step(self):
+        self.count += 1
+        variance = self.eta / (1 + self.count) ** self.gamma
+        std = variance ** 0.5
+        for p in self.parameters():
+            if p.grad is not None:
+                p.grad.add_(torch.randn_like(p.grad) * std)
