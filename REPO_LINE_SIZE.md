@@ -1,5 +1,7 @@
 # Repository Line Count
 
+Total lines of Python code in the repository (output of `find . -name "*.py" -not -path "./.git/*" | sort | xargs wc -l`):
+
 ```
      24 ./dev_nbs/course/crappify.py
       6 ./fastai/basics.py
@@ -58,7 +60,7 @@
       1 ./fastai/text/models/__init__.py
      13 ./fastai/torch_basics.py
     903 ./fastai/torch_core.py
-      9 ./fastai/torch_imports.py
+      8 ./fastai/torch_imports.py
       9 ./fastai/vision/all.py
    1266 ./fastai/vision/augment.py
     309 ./fastai/vision/core.py
@@ -108,5 +110,5 @@
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  25494 total
+  25493 total
 ```
