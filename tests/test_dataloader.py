@@ -1,4 +1,4 @@
-"""Tests for fastai/data/load.py - DataLoader, fa_collate, fa_convert, SkipItemException.
+"""Tests for fastai/data/load.py - DataLoader, fa_collate, fa_convert, SkipItemException, _FakeLoader.
 
 Covers:
 - fa_collate with various types (tensors, numpy arrays, sequences)
@@ -13,6 +13,11 @@ Covers:
 - DataLoader with prebatched (bs=None)
 - DataLoader device property setting
 - SkipItemException being handled (do_item returning None)
+- DataLoader.shuffle_fn
+- DataLoader.randomize
+- DataLoader.chunkify
+- _FakeLoader helper class
+- Integration tests (multi-epoch ordering, TensorDataset, edge cases)
 """
 import sys
 import os
@@ -22,7 +27,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from fastai.data.load import fa_collate, fa_convert, SkipItemException, collate_error, DataLoader
+from fastai.data.load import fa_collate, fa_convert, SkipItemException, collate_error, DataLoader, _FakeLoader
 
 
 # ============================================================
@@ -698,3 +703,183 @@ class TestDataLoaderCallbacks:
         batches = list(dl)
         # First batch should be [0,1]*2 = [0,2]
         assert torch.equal(batches[0], torch.tensor([0, 2]))
+
+
+# ============================================================
+# Tests for DataLoader.shuffle_fn
+# ============================================================
+
+class TestDataLoaderShuffleFn:
+    """Tests for DataLoader.shuffle_fn method."""
+
+    def test_shuffle_fn_preserves_elements(self):
+        """shuffle_fn returns a permutation of input."""
+        dataset = list(range(10))
+        dl = DataLoader(dataset, bs=2, num_workers=0)
+        idxs = list(range(10))
+        shuffled = dl.shuffle_fn(idxs)
+        assert sorted(shuffled) == list(range(10))
+        assert len(shuffled) == 10
+
+
+# ============================================================
+# Tests for DataLoader.do_item with SkipItemException
+# ============================================================
+
+class TestDataLoaderDoItem:
+    """Tests for DataLoader.do_item with item skipping."""
+
+    def test_skip_item_exception_skips(self):
+        """Items raising SkipItemException are skipped (return None)."""
+        dataset = list(range(10))
+        dl = DataLoader(dataset, bs=5, num_workers=0)
+
+        # Override after_item to skip even numbers
+        def skip_evens(x):
+            if x % 2 == 0:
+                raise SkipItemException()
+            return x
+        dl.after_item = skip_evens
+
+        result = dl.do_item(0)
+        assert result is None
+
+        result = dl.do_item(1)
+        assert result == 1
+
+
+# ============================================================
+# Tests for DataLoader.randomize
+# ============================================================
+
+class TestDataLoaderRandomize:
+    """Tests for DataLoader.randomize method."""
+
+    def test_randomize_changes_rng_state(self):
+        """randomize() changes the internal rng state."""
+        dataset = list(range(10))
+        dl = DataLoader(dataset, bs=2, num_workers=0, shuffle=True)
+        state1 = dl.rng.getstate()
+        dl.randomize()
+        state2 = dl.rng.getstate()
+        assert state1 != state2
+
+
+# ============================================================
+# Tests for DataLoader.chunkify
+# ============================================================
+
+class TestDataLoaderChunkify:
+    """Tests for DataLoader.chunkify method."""
+
+    def test_chunkify_with_bs(self):
+        """chunkify splits items into chunks of size bs."""
+        dataset = list(range(10))
+        dl = DataLoader(dataset, bs=3, num_workers=0)
+        items = iter(range(9))
+        chunks = list(dl.chunkify(items))
+        assert len(chunks) == 3
+        assert list(chunks[0]) == [0, 1, 2]
+        assert list(chunks[1]) == [3, 4, 5]
+        assert list(chunks[2]) == [6, 7, 8]
+
+    def test_chunkify_prebatched(self):
+        """chunkify in prebatched mode returns items as-is."""
+        dataset = [[1, 2, 3], [4, 5, 6]]
+        dl = DataLoader(dataset, bs=None, num_workers=0)
+        items = iter([[1, 2, 3], [4, 5, 6]])
+        chunks = list(dl.chunkify(items))
+        assert chunks == [[1, 2, 3], [4, 5, 6]]
+
+
+# ============================================================
+# Tests for _FakeLoader
+# ============================================================
+
+class TestFakeLoader:
+    """Tests for the _FakeLoader helper class."""
+
+    def test_fake_loader_init(self):
+        """_FakeLoader stores its configuration."""
+        dataset = list(range(10))
+        dl = DataLoader(dataset, bs=5, num_workers=0)
+        fl = dl.fake_l
+        assert fl.num_workers == 0
+        assert fl.pin_memory is False
+        assert fl.d is dl
+
+    def test_fake_loader_no_multiproc_context(self):
+        """no_multiproc context manager temporarily sets num_workers=0."""
+        dataset = list(range(10))
+        dl = DataLoader(dataset, bs=5, num_workers=0)
+        fl = dl.fake_l
+        with fl.no_multiproc() as d:
+            assert fl.num_workers == 0
+            assert d is dl
+
+
+# ============================================================
+# Integration tests
+# ============================================================
+
+class TestDataLoaderIntegration:
+    """End-to-end integration tests for DataLoader."""
+
+    def test_multiple_epochs_produce_different_order_when_shuffled(self):
+        """Multiple iterations with shuffle produce different orderings."""
+        dataset = list(range(100))
+        dl = DataLoader(dataset, bs=100, num_workers=0, shuffle=True)
+        dl.retain = lambda res, b: res
+        epoch1 = list(dl)[0].tolist()
+        epoch2 = list(dl)[0].tolist()
+        # Different epochs should produce different orderings
+        assert epoch1 != epoch2
+
+    def test_multiple_epochs_same_order_when_not_shuffled(self):
+        """Multiple iterations without shuffle produce the same ordering."""
+        dataset = list(range(20))
+        dl = DataLoader(dataset, bs=10, num_workers=0, shuffle=False)
+        dl.retain = lambda res, b: res
+        epoch1 = [b.tolist() for b in dl]
+        epoch2 = [b.tolist() for b in dl]
+        assert epoch1 == epoch2
+
+    def test_tensor_dataset(self):
+        """DataLoader works with a TensorDataset-like indexed dataset."""
+        class TensorDS:
+            def __init__(self, x, y):
+                self.x, self.y = x, y
+            def __getitem__(self, idx):
+                return (self.x[idx], self.y[idx])
+            def __len__(self):
+                return len(self.x)
+
+        x = torch.arange(12).float()
+        y = torch.arange(12).float() * 2
+        ds = TensorDS(x, y)
+        dl = DataLoader(ds, bs=4, num_workers=0)
+        dl.retain = lambda res, b: res
+        batches = list(dl)
+        assert len(batches) == 3
+        for b in batches:
+            assert isinstance(b, tuple)
+            assert b[0].shape == (4,)
+            assert b[1].shape == (4,)
+
+    def test_single_item_dataset(self):
+        """DataLoader handles a single-item dataset."""
+        dataset = [42]
+        dl = DataLoader(dataset, bs=1, num_workers=0)
+        dl.retain = lambda res, b: res
+        batches = list(dl)
+        assert len(batches) == 1
+        assert batches[0].item() == 42
+
+    def test_large_bs_smaller_dataset(self):
+        """When bs > n, one batch contains all items."""
+        dataset = list(range(5))
+        dl = DataLoader(dataset, bs=100, num_workers=0)
+        dl.retain = lambda res, b: res
+        batches = list(dl)
+        assert len(batches) == 1
+        assert batches[0].shape == (5,)
