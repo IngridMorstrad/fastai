@@ -9,7 +9,7 @@ from ..basics import *
 # %% auto 0
 __all__ = ['annealer', 'sched_lin', 'sched_cos', 'sched_no', 'sched_exp', 'SchedLin', 'SchedCos', 'SchedNo', 'SchedExp',
            'SchedPoly', 'combine_scheds', 'combined_cos', 'ParamScheduler', 'LRFinder', 'valley', 'slide', 'minimum',
-           'steep', 'SuggestionMethod']
+           'steep', 'SuggestionMethod', 'LRWarmupCallback']
 
 # %% ../../nbs/14_callback.schedule.ipynb 3
 _all_ = ['SuggestionMethod']
@@ -90,6 +90,44 @@ class ParamScheduler(Callback):
              "before_batch": "Set the proper hyper-parameters in the optimizer",
              "after_batch": "Record hyper-parameters of this batch",
              "after_fit": "Save the hyper-parameters in the recorder if there is one"}
+
+# %% ../../nbs/14_callback.schedule.ipynb 43
+@docs
+class LRWarmupCallback(Callback):
+    "Gradually ramp learning rate from `start_lr` to the optimizer's set LR over `warmup_steps` using `schedule` ('linear' or 'exponential')"
+    order = 55  # Run before ParamScheduler (order=60) so warmup overrides during early steps
+
+    def __init__(self, warmup_steps=100, start_lr=1e-7, schedule='linear'):
+        store_attr('warmup_steps,start_lr,schedule')
+        if schedule not in ('linear', 'exponential'):
+            raise ValueError(f"schedule must be 'linear' or 'exponential', got '{schedule}'")
+
+    def before_fit(self):
+        self.target_lrs = [h['lr'] for h in self.opt.hypers]
+        self._step = 0
+
+    def before_batch(self):
+        if not self.training: return
+        if self._step >= self.warmup_steps: return
+        pct = self._step / self.warmup_steps
+        for h, target_lr in zip(self.opt.hypers, self.target_lrs):
+            if self.schedule == 'linear':
+                h['lr'] = self.start_lr + pct * (target_lr - self.start_lr)
+            else:  # exponential
+                h['lr'] = self.start_lr * (target_lr / self.start_lr) ** pct
+
+    def after_batch(self):
+        if not self.training: return
+        if self._step < self.warmup_steps:
+            self._step += 1
+            # Restore target LR once warmup completes on this step
+            if self._step >= self.warmup_steps:
+                for h, target_lr in zip(self.opt.hypers, self.target_lrs):
+                    h['lr'] = target_lr
+
+    _docs = {"before_fit": "Store target learning rates from the optimizer",
+             "before_batch": "Set the ramped learning rate if still in warmup phase",
+             "after_batch": "Increment the step counter and restore target LR when warmup finishes"}
 
 # %% ../../nbs/14_callback.schedule.ipynb 46
 @patch
