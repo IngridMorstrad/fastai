@@ -2,7 +2,7 @@
 
 Covers fa_collate, fa_convert, SkipItemException, collate_error,
 DataLoader class initialization, iteration, batching, shuffling,
-device placement, and edge cases.
+device placement, callbacks, and edge cases.
 """
 import sys
 import os
@@ -14,30 +14,18 @@ if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
 # Patch missing functions from fastcore/fasttransform that are needed at runtime.
-# The installed fastcore version moved retain_types/cast to fasttransform;
-# we patch them into the relevant module namespaces so DataLoader iteration works.
 import fasttransform
 import fastcore.basics
 
-# Patch retain_types and cast into the fastcore.dispatch module namespace
-# since fastai imports them via `from fastcore.dispatch import *`
-class _FakeDispatch:
-    """Shim module providing retain_types and cast that fastai expects."""
-    pass
-
-# If fastcore.dispatch doesn't properly export these, patch them in
 try:
     from fastcore.dispatch import retain_types, cast
 except (ImportError, AttributeError):
     from fasttransform import retain_types, cast
-    # Patch into the modules that need them
     import fastai.torch_core as _tc
     if not hasattr(_tc, 'retain_types'):
         _tc.retain_types = retain_types
     if not hasattr(_tc, 'cast'):
         _tc.cast = cast
-
-    # Also ensure they exist in the data.load module's global scope
     import fastai.data.load as _dl_mod
     if not hasattr(_dl_mod, 'retain_types'):
         _dl_mod.retain_types = retain_types
@@ -116,6 +104,20 @@ class TestFaCollate:
         assert result['a'].tolist() == [[1], [3]]
         assert result['b'].tolist() == [[2], [4]]
 
+    def test_collate_integers(self):
+        """Collating plain integers via default_collate."""
+        items = [1, 2, 3, 4]
+        result = fa_collate(items)
+        expected = torch.tensor([1, 2, 3, 4])
+        assert torch.equal(result, expected)
+
+    def test_collate_floats(self):
+        """Collating plain floats via default_collate."""
+        items = [1.5, 2.5, 3.5]
+        result = fa_collate(items)
+        expected = torch.tensor([1.5, 2.5, 3.5])
+        assert torch.equal(result, expected)
+
 
 # ============================================================
 # Tests for fa_convert
@@ -126,7 +128,7 @@ class TestFaConvert:
 
     def test_convert_tensor(self):
         """Converting a tensor returns the same tensor."""
-        t = torch.tensor([1, 2, 3])
+        t = torch.tensor([1.0, 2.0, 3.0])
         result = fa_convert(t)
         assert isinstance(result, Tensor)
         assert torch.equal(result, t)
@@ -136,25 +138,41 @@ class TestFaConvert:
         arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         result = fa_convert(arr)
         assert isinstance(result, Tensor)
+        assert result.tolist() == [1.0, 2.0, 3.0]
 
     def test_convert_string(self):
-        """Converting a string returns the string unchanged."""
+        """Converting a string returns it unchanged."""
         result = fa_convert("hello")
         assert result == "hello"
 
-    def test_convert_list_of_tensors(self):
-        """Converting a list of tensors returns a list of converted items."""
-        items = [torch.tensor([1, 2]), torch.tensor([3, 4])]
-        result = fa_convert(items)
-        assert isinstance(result, list)
-        assert len(result) == 2
-
-    def test_convert_tuple_of_tensors(self):
-        """Converting a tuple preserves tuple type."""
-        items = (torch.tensor([1, 2]), torch.tensor([3, 4]))
+    def test_convert_tuple(self):
+        """Converting a tuple preserves type and converts each element."""
+        items = (np.array([1.0]), np.array([2.0]))
         result = fa_convert(items)
         assert isinstance(result, tuple)
-        assert len(result) == 2
+        assert isinstance(result[0], Tensor)
+        assert isinstance(result[1], Tensor)
+
+    def test_convert_list(self):
+        """Converting a list preserves type and converts each element."""
+        items = [np.array([1.0]), np.array([2.0])]
+        result = fa_convert(items)
+        assert isinstance(result, list)
+        assert isinstance(result[0], Tensor)
+        assert isinstance(result[1], Tensor)
+
+    def test_convert_mapping(self):
+        """Converting a mapping converts each value."""
+        d = {'a': np.array([1.0]), 'b': np.array([2.0])}
+        result = fa_convert(d)
+        assert isinstance(result, dict)
+        assert isinstance(result['a'], Tensor)
+        assert isinstance(result['b'], Tensor)
+
+    def test_convert_integer(self):
+        """Plain integers (non-collate, non-Sequence) pass through unchanged."""
+        result = fa_convert(42)
+        assert result == 42
 
 
 # ============================================================
@@ -172,6 +190,60 @@ class TestSkipItemException:
         """SkipItemException can be raised and caught."""
         with pytest.raises(SkipItemException):
             raise SkipItemException()
+
+    def test_with_message(self):
+        """SkipItemException can carry a message."""
+        with pytest.raises(SkipItemException, match="skip this"):
+            raise SkipItemException("skip this")
+
+
+# ============================================================
+# Tests for collate_error
+# ============================================================
+
+class TestCollateError:
+    """Tests for collate_error function."""
+
+    def test_raises_on_shape_mismatch(self):
+        """collate_error raises with informative message on shape mismatch."""
+        batch = [
+            (torch.zeros(3, 4), torch.zeros(2)),
+            (torch.zeros(3, 5), torch.zeros(2)),
+        ]
+        e = RuntimeError("original error")
+        with pytest.raises(RuntimeError) as exc_info:
+            try:
+                raise e
+            except RuntimeError:
+                collate_error(e, batch)
+        error_msg = str(exc_info.value)
+        assert "Mismatch found" in error_msg
+        assert "axis 0" in error_msg
+
+    def test_error_message_contains_shapes(self):
+        """The error message includes both shapes that differ."""
+        batch = [
+            (torch.zeros(3, 4),),
+            (torch.zeros(3, 5),),
+        ]
+        e = RuntimeError("collate failed")
+        with pytest.raises(RuntimeError) as exc_info:
+            try:
+                raise e
+            except RuntimeError:
+                collate_error(e, batch)
+        error_msg = str(exc_info.value)
+        assert 'torch.Size([3, 4])' in error_msg
+        assert 'torch.Size([3, 5])' in error_msg
+
+    def test_no_raise_when_shapes_match(self):
+        """Does not raise when all items have the same shape."""
+        batch = [
+            (torch.zeros(3, 4), torch.zeros(2)),
+            (torch.zeros(3, 4), torch.zeros(2)),
+        ]
+        e = RuntimeError("original error")
+        collate_error(e, batch)
 
 
 # ============================================================
@@ -197,11 +269,17 @@ class TestDataLoaderInit:
         dl = DataLoader(dataset, batch_size=4)
         assert dl.bs == 4
 
-    def test_default_bs_is_none_allowed(self):
+    def test_prebatched_mode(self):
         """bs=None means prebatched mode (no chunking)."""
         dataset = [[1, 2, 3], [4, 5, 6]]
         dl = DataLoader(dataset, bs=None)
         assert dl.prebatched is True
+
+    def test_not_prebatched(self):
+        """prebatched is False when bs is set."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        assert dl.prebatched is False
 
     def test_drop_last_requires_bs(self):
         """drop_last=True without bs raises AssertionError."""
@@ -238,6 +316,18 @@ class TestDataLoaderInit:
         dl = DataLoader(InfDS(), bs=2, n=None)
         assert dl.n is None
 
+    def test_device_none_default(self):
+        """Device defaults to None."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        assert dl.device is None
+
+    def test_device_init_param(self):
+        """Device can be set via init parameter."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, device='cpu')
+        assert dl.device == torch.device('cpu')
+
 
 # ============================================================
 # Tests for DataLoader __len__
@@ -246,40 +336,138 @@ class TestDataLoaderInit:
 class TestDataLoaderLen:
     """Tests for DataLoader __len__."""
 
-    def test_len_basic(self):
-        """__len__ returns correct number of batches."""
-        dataset = list(range(10))
-        dl = DataLoader(dataset, bs=3)
-        # 10 / 3 = 3 full batches + 1 partial = 4
-        assert len(dl) == 4
-
     def test_len_exact_division(self):
-        """__len__ with exact division gives exact count."""
+        """n evenly divisible by bs gives exact count."""
         dataset = list(range(12))
         dl = DataLoader(dataset, bs=4)
         assert len(dl) == 3
 
-    def test_len_drop_last(self):
-        """__len__ with drop_last drops incomplete final batch."""
+    def test_len_with_remainder(self):
+        """Includes partial batch when drop_last=False."""
+        dataset = list(range(10))
+        dl = DataLoader(dataset, bs=3)
+        assert len(dl) == 4  # 3+3+3+1
+
+    def test_len_with_drop_last(self):
+        """Excludes partial batch when drop_last=True."""
         dataset = list(range(10))
         dl = DataLoader(dataset, bs=3, drop_last=True)
-        # 10 / 3 = 3 full batches, drop partial
         assert len(dl) == 3
 
-    def test_len_no_bs(self):
-        """__len__ with bs=None returns n (prebatched mode)."""
+    def test_len_prebatched(self):
+        """With bs=None, length equals n."""
         dataset = [[1, 2], [3, 4], [5, 6]]
         dl = DataLoader(dataset, bs=None)
         assert len(dl) == 3
 
     def test_len_raises_if_n_none(self):
-        """__len__ raises TypeError when n is None."""
+        """Raises TypeError when n is None."""
         class InfDS:
             def __getitem__(self, idx):
                 return idx
         dl = DataLoader(InfDS(), bs=2, n=None)
         with pytest.raises(TypeError):
             len(dl)
+
+    def test_len_single_item(self):
+        """Dataset with 1 item, bs=1."""
+        ds = [42]
+        dl = DataLoader(ds, bs=1)
+        assert len(dl) == 1
+
+    def test_len_bs_larger_than_n(self):
+        """When bs > n, there is still 1 batch."""
+        ds = list(range(3))
+        dl = DataLoader(ds, bs=10)
+        assert len(dl) == 1
+
+    def test_len_bs_larger_than_n_drop_last(self):
+        """When bs > n and drop_last, there are 0 batches."""
+        ds = list(range(3))
+        dl = DataLoader(ds, bs=10, drop_last=True)
+        assert len(dl) == 0
+
+
+# ============================================================
+# Tests for DataLoader.get_idxs
+# ============================================================
+
+class TestDataLoaderGetIdxs:
+    """Tests for DataLoader.get_idxs method."""
+
+    def test_get_idxs_no_shuffle(self):
+        """Without shuffle, indices are sequential."""
+        dataset = list(range(5))
+        dl = DataLoader(dataset, bs=2, shuffle=False)
+        idxs = dl.get_idxs()
+        assert idxs == [0, 1, 2, 3, 4]
+
+    def test_get_idxs_with_shuffle(self):
+        """With shuffle, indices are a permutation of the same set."""
+        dataset = list(range(50))
+        dl = DataLoader(dataset, bs=10, shuffle=True)
+        idxs = dl.get_idxs()
+        assert sorted(idxs) == list(range(50))
+        # Very unlikely to be in order
+        assert idxs != list(range(50))
+
+    def test_get_idxs_length_matches_n(self):
+        """get_idxs returns exactly n indices."""
+        ds = list(range(15))
+        dl = DataLoader(ds, bs=4, shuffle=True)
+        idxs = dl.get_idxs()
+        assert len(idxs) == 15
+
+    def test_get_idxs_with_explicit_n(self):
+        """get_idxs respects explicit n parameter."""
+        ds = list(range(100))
+        dl = DataLoader(ds, bs=5, n=10)
+        idxs = dl.get_idxs()
+        assert len(idxs) == 10
+
+
+# ============================================================
+# Tests for DataLoader.shuffle_fn
+# ============================================================
+
+class TestDataLoaderShuffleFn:
+    """Tests for DataLoader.shuffle_fn method."""
+
+    def test_shuffle_fn_preserves_elements(self):
+        """shuffle_fn returns a permutation of input."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, shuffle=True)
+        idxs = list(range(10))
+        shuffled = dl.shuffle_fn(idxs)
+        assert sorted(shuffled) == list(range(10))
+        assert len(shuffled) == 10
+
+    def test_shuffle_fn_produces_different_orders(self):
+        """shuffle_fn produces different orderings on repeated calls."""
+        ds = list(range(100))
+        dl = DataLoader(ds, bs=2, shuffle=True)
+        idxs = list(range(100))
+        result1 = dl.shuffle_fn(idxs)
+        dl.randomize()
+        result2 = dl.shuffle_fn(idxs)
+        assert result1 != result2
+
+
+# ============================================================
+# Tests for DataLoader.randomize
+# ============================================================
+
+class TestDataLoaderRandomize:
+    """Tests for DataLoader.randomize method."""
+
+    def test_randomize_changes_rng_state(self):
+        """randomize() changes the internal rng state."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, shuffle=True)
+        state1 = dl.rng.getstate()
+        dl.randomize()
+        state2 = dl.rng.getstate()
+        assert state1 != state2
 
 
 # ============================================================
@@ -295,7 +483,6 @@ class TestDataLoaderIteration:
         dl = DataLoader(dataset, bs=5, num_workers=0)
         batches = list(dl)
         assert len(batches) == 2
-        # Each batch should be a tensor of size 5
         assert batches[0].shape == (5,)
         assert batches[1].shape == (5,)
 
@@ -314,7 +501,6 @@ class TestDataLoaderIteration:
         dl = DataLoader(dataset, bs=3, num_workers=0)
         batches = list(dl)
         assert len(batches) == 2
-        # Each batch is a tuple of two tensors
         for b in batches:
             assert isinstance(b, tuple)
             assert b[0].shape == (3, 1)
@@ -333,7 +519,6 @@ class TestDataLoaderIteration:
         dataset = list(range(100))
         dl = DataLoader(dataset, bs=100, num_workers=0, shuffle=True)
         batch = list(dl)[0]
-        # Very unlikely that a shuffled 100-item list is in order
         assert batch.tolist() != list(range(100))
 
     def test_shuffle_preserves_all_items(self):
@@ -352,6 +537,32 @@ class TestDataLoaderIteration:
         assert batches[0].tolist() == [1, 2, 3]
         assert batches[1].tolist() == [4, 5, 6]
 
+    def test_multiple_epochs(self):
+        """DataLoader can be iterated multiple times."""
+        dataset = list(range(4))
+        dl = DataLoader(dataset, bs=2, num_workers=0)
+        epoch1 = list(dl)
+        epoch2 = list(dl)
+        assert len(epoch1) == 2
+        assert len(epoch2) == 2
+
+    def test_shuffle_different_across_epochs(self):
+        """Shuffled DataLoader produces different orders across epochs."""
+        dataset = list(range(100))
+        dl = DataLoader(dataset, bs=100, num_workers=0, shuffle=True)
+        epoch1 = list(dl)[0].tolist()
+        epoch2 = list(dl)[0].tolist()
+        assert sorted(epoch1) == sorted(epoch2) == list(range(100))
+        assert epoch1 != epoch2
+
+    def test_no_shuffle_same_across_epochs(self):
+        """Non-shuffled DataLoader produces the same order across epochs."""
+        dataset = list(range(20))
+        dl = DataLoader(dataset, bs=10, num_workers=0, shuffle=False)
+        epoch1 = [b.tolist() for b in dl]
+        epoch2 = [b.tolist() for b in dl]
+        assert epoch1 == epoch2
+
 
 # ============================================================
 # Tests for DataLoader.one_batch
@@ -360,16 +571,25 @@ class TestDataLoaderIteration:
 class TestDataLoaderOneBatch:
     """Tests for DataLoader.one_batch method."""
 
-    def test_one_batch_returns_first_batch(self):
-        """one_batch returns the first batch of data."""
+    def test_one_batch_returns_correct_size(self):
+        """one_batch returns a batch of size bs."""
         dataset = list(range(10))
-        dl = DataLoader(dataset, bs=5, num_workers=0)
+        dl = DataLoader(dataset, bs=4, num_workers=0)
         batch = dl.one_batch()
         assert isinstance(batch, Tensor)
-        assert batch.shape == (5,)
+        assert batch.shape == (4,)
+
+    def test_one_batch_tuple_dataset(self):
+        """one_batch works with tuple datasets."""
+        dataset = [(torch.tensor([float(i)]), torch.tensor([float(i * 2)])) for i in range(6)]
+        dl = DataLoader(dataset, bs=3, num_workers=0)
+        batch = dl.one_batch()
+        assert isinstance(batch, tuple)
+        assert batch[0].shape == (3, 1)
+        assert batch[1].shape == (3, 1)
 
     def test_one_batch_empty_raises(self):
-        """one_batch raises ValueError for empty DataLoader."""
+        """one_batch on empty DataLoader raises ValueError."""
         dl = DataLoader([], bs=1, num_workers=0)
         with pytest.raises(ValueError, match="does not contain any batches"):
             dl.one_batch()
@@ -382,7 +602,7 @@ class TestDataLoaderOneBatch:
 class TestDataLoaderNew:
     """Tests for DataLoader.new method."""
 
-    def test_new_creates_copy_with_same_params(self):
+    def test_new_creates_copy(self):
         """new() creates a DataLoader with the same configuration."""
         dataset = list(range(10))
         dl = DataLoader(dataset, bs=5, num_workers=0, shuffle=True, drop_last=True)
@@ -409,73 +629,13 @@ class TestDataLoaderNew:
         assert dl2.bs == 6
         assert len(dl2) == 2
 
-
-# ============================================================
-# Tests for DataLoader.to and device property
-# ============================================================
-
-class TestDataLoaderDevice:
-    """Tests for DataLoader device management."""
-
-    def test_to_sets_device(self):
-        """to() method sets the device property."""
-        dataset = list(range(10))
-        dl = DataLoader(dataset, bs=5, num_workers=0)
-        dl.to('cpu')
-        assert dl.device == torch.device('cpu')
-
-    def test_device_none_by_default(self):
-        """device is None by default."""
-        dataset = list(range(10))
-        dl = DataLoader(dataset, bs=5, num_workers=0)
-        assert dl.device is None
-
-    def test_device_init(self):
-        """device can be set during initialization."""
-        dataset = list(range(10))
-        dl = DataLoader(dataset, bs=5, num_workers=0, device='cpu')
-        assert dl.device == torch.device('cpu')
-
-
-# ============================================================
-# Tests for DataLoader.get_idxs
-# ============================================================
-
-class TestDataLoaderGetIdxs:
-    """Tests for DataLoader.get_idxs method."""
-
-    def test_get_idxs_no_shuffle(self):
-        """get_idxs returns sequential indices when shuffle=False."""
-        dataset = list(range(5))
-        dl = DataLoader(dataset, bs=2, num_workers=0, shuffle=False)
-        idxs = dl.get_idxs()
-        assert idxs == [0, 1, 2, 3, 4]
-
-    def test_get_idxs_shuffle(self):
-        """get_idxs returns shuffled indices when shuffle=True."""
-        dataset = list(range(50))
-        dl = DataLoader(dataset, bs=10, num_workers=0, shuffle=True)
-        idxs = dl.get_idxs()
-        assert sorted(idxs) == list(range(50))
-        # Likely not in order
-        assert idxs != list(range(50))
-
-
-# ============================================================
-# Tests for DataLoader.shuffle_fn
-# ============================================================
-
-class TestDataLoaderShuffleFn:
-    """Tests for DataLoader.shuffle_fn method."""
-
-    def test_shuffle_fn_preserves_elements(self):
-        """shuffle_fn returns a permutation of input."""
-        dataset = list(range(10))
-        dl = DataLoader(dataset, bs=2, num_workers=0)
-        idxs = list(range(10))
-        shuffled = dl.shuffle_fn(idxs)
-        assert sorted(shuffled) == list(range(10))
-        assert len(shuffled) == 10
+    def test_new_is_independent(self):
+        """new() creates an independent DataLoader."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=3, shuffle=True)
+        dl2 = dl.new(shuffle=False)
+        assert dl.shuffle is True
+        assert dl2.shuffle is False
 
 
 # ============================================================
@@ -485,40 +645,75 @@ class TestDataLoaderShuffleFn:
 class TestDataLoaderDoItem:
     """Tests for DataLoader.do_item with item skipping."""
 
-    def test_skip_item_exception_skips(self):
-        """Items raising SkipItemException are skipped (return None)."""
-        dataset = list(range(10))
-        dl = DataLoader(dataset, bs=5, num_workers=0)
+    def test_do_item_returns_item(self):
+        """do_item returns the dataset item for the given index."""
+        ds = [10, 20, 30]
+        dl = DataLoader(ds, bs=2)
+        assert dl.do_item(0) == 10
+        assert dl.do_item(2) == 30
 
-        # Override after_item to skip even numbers
-        def skip_evens(x):
-            if x % 2 == 0:
+    def test_do_item_skip_exception_returns_none(self):
+        """do_item returns None when SkipItemException is raised."""
+        ds = [10, 20, 30]
+        dl = DataLoader(ds, bs=2)
+
+        def skip_after_item(x):
+            if x == 20:
                 raise SkipItemException()
             return x
-        dl.after_item = skip_evens
 
-        result = dl.do_item(0)
-        assert result is None
+        dl.after_item = skip_after_item
+        assert dl.do_item(0) == 10
+        assert dl.do_item(1) is None
+        assert dl.do_item(2) == 30
 
-        result = dl.do_item(1)
-        assert result == 1
+    def test_skip_item_during_iteration(self):
+        """Items raising SkipItemException are filtered out during iteration."""
+        ds = list(range(6))
+        dl = DataLoader(ds, bs=6, num_workers=0, shuffle=False)
+
+        def skip_odds(x):
+            if x % 2 != 0:
+                raise SkipItemException()
+            return x
+
+        dl.after_item = skip_odds
+        batches = list(dl)
+        all_items = torch.cat(batches).tolist()
+        assert all_items == [0, 2, 4]
 
 
 # ============================================================
-# Tests for DataLoader.randomize
+# Tests for DataLoader.create_item
 # ============================================================
 
-class TestDataLoaderRandomize:
-    """Tests for DataLoader.randomize method."""
+class TestDataLoaderCreateItem:
+    """Tests for DataLoader.create_item method."""
 
-    def test_randomize_changes_rng_state(self):
-        """randomize() changes the internal rng state."""
-        dataset = list(range(10))
-        dl = DataLoader(dataset, bs=2, num_workers=0, shuffle=True)
-        state1 = dl.rng.getstate()
-        dl.randomize()
-        state2 = dl.rng.getstate()
-        assert state1 != state2
+    def test_create_item_indexed(self):
+        """With indexed dataset, create_item returns dataset[s]."""
+        ds = [10, 20, 30, 40, 50]
+        dl = DataLoader(ds, bs=2)
+        assert dl.create_item(0) == 10
+        assert dl.create_item(2) == 30
+        assert dl.create_item(4) == 50
+
+    def test_create_item_non_indexed(self):
+        """With non-indexed dataset, create_item(None) uses the iterator."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False)
+        dl.it = iter([10, 20, 30])
+        assert dl.create_item(None) == 10
+        assert dl.create_item(None) == 20
+        assert dl.create_item(None) == 30
+
+    def test_create_item_non_indexed_raises_on_numeric_index(self):
+        """Non-indexed dataset raises IndexError when given a numeric index."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False)
+        dl.it = iter([10, 20, 30])
+        with pytest.raises(IndexError, match="Cannot index an iterable dataset"):
+            dl.create_item(0)
 
 
 # ============================================================
@@ -532,20 +727,106 @@ class TestDataLoaderChunkify:
         """chunkify splits items into chunks of size bs."""
         dataset = list(range(10))
         dl = DataLoader(dataset, bs=3, num_workers=0)
-        items = iter(range(9))
-        chunks = list(dl.chunkify(items))
+        chunks = list(dl.chunkify(iter(range(9))))
         assert len(chunks) == 3
         assert list(chunks[0]) == [0, 1, 2]
         assert list(chunks[1]) == [3, 4, 5]
         assert list(chunks[2]) == [6, 7, 8]
 
     def test_chunkify_prebatched(self):
-        """chunkify in prebatched mode returns items as-is."""
+        """In prebatched mode, chunkify returns items as-is."""
         dataset = [[1, 2, 3], [4, 5, 6]]
         dl = DataLoader(dataset, bs=None, num_workers=0)
         items = iter([[1, 2, 3], [4, 5, 6]])
         chunks = list(dl.chunkify(items))
         assert chunks == [[1, 2, 3], [4, 5, 6]]
+
+    def test_chunkify_with_drop_last(self):
+        """With drop_last=True, chunkify drops incomplete final chunk."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=3, drop_last=True)
+        chunks = list(dl.chunkify(iter(range(10))))
+        assert len(chunks) == 3
+        for chunk in chunks:
+            assert len(list(chunk)) == 3
+
+
+# ============================================================
+# Tests for DataLoader.device property
+# ============================================================
+
+class TestDataLoaderDevice:
+    """Tests for DataLoader device management."""
+
+    def test_device_setter_string(self):
+        """Setting device with string works."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        dl.device = 'cpu'
+        assert dl.device == torch.device('cpu')
+
+    def test_device_setter_torch_device(self):
+        """Setting device with a torch.device works."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        dl.device = torch.device('cpu')
+        assert dl.device == torch.device('cpu')
+
+    def test_to_sets_device(self):
+        """to() method sets the device property."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        dl.to('cpu')
+        assert dl.device == torch.device('cpu')
+
+
+# ============================================================
+# Tests for DataLoader callbacks
+# ============================================================
+
+class TestDataLoaderCallbacks:
+    """Tests for DataLoader callback/hook methods."""
+
+    def test_before_batch_hook(self):
+        """before_batch is called on each batch."""
+        dataset = list(range(6))
+        dl = DataLoader(dataset, bs=3, num_workers=0)
+        calls = []
+
+        def track_before_batch(b):
+            calls.append(1)
+            return b
+        dl.before_batch = track_before_batch
+
+        list(dl)
+        assert len(calls) == 2
+
+    def test_after_batch_hook(self):
+        """after_batch is called on each batch after collation."""
+        dataset = list(range(6))
+        dl = DataLoader(dataset, bs=3, num_workers=0)
+        calls = []
+
+        def track_after_batch(b):
+            calls.append(b)
+            return b
+        dl.after_batch = track_after_batch
+
+        list(dl)
+        assert len(calls) == 2
+
+    def test_after_item_transforms_items(self):
+        """after_item can transform individual items."""
+        dataset = list(range(6))
+        dl = DataLoader(dataset, bs=3, num_workers=0)
+
+        def double(x):
+            return x * 2
+        dl.after_item = double
+
+        batches = list(dl)
+        all_items = torch.cat(batches).tolist()
+        assert sorted(all_items) == [0, 2, 4, 6, 8, 10]
 
 
 # ============================================================
@@ -575,111 +856,11 @@ class TestFakeLoader:
 
 
 # ============================================================
-# Tests for collate_error
-# ============================================================
-
-class TestCollateError:
-    """Tests for collate_error function."""
-
-    def test_collate_error_gives_informative_message(self):
-        """collate_error modifies the exception message to be informative."""
-        batch = [
-            (torch.zeros(3, 4), torch.zeros(2)),
-            (torch.zeros(3, 5), torch.zeros(2)),  # Mismatch: (3,4) vs (3,5)
-        ]
-        e = RuntimeError("original error")
-        # collate_error uses bare `raise` so it must be called from an except block
-        with pytest.raises(RuntimeError) as exc_info:
-            try:
-                raise e
-            except RuntimeError:
-                collate_error(e, batch)
-        assert "Mismatch found" in str(exc_info.value)
-
-    def test_collate_error_no_mismatch_no_raise(self):
-        """collate_error with matching shapes does not raise."""
-        batch = [
-            (torch.zeros(3, 4), torch.zeros(2)),
-            (torch.zeros(3, 4), torch.zeros(2)),
-        ]
-        e = RuntimeError("original error")
-        # Should not raise since there's no mismatch
-        collate_error(e, batch)
-
-
-# ============================================================
-# Tests for DataLoader with callbacks
-# ============================================================
-
-class TestDataLoaderCallbacks:
-    """Tests for DataLoader callback/hook methods."""
-
-    def test_before_batch_hook(self):
-        """before_batch is called on each batch before collation."""
-        dataset = list(range(6))
-        dl = DataLoader(dataset, bs=3, num_workers=0)
-        calls = []
-
-        def track_before_batch(b):
-            calls.append(1)
-            return b
-        dl.before_batch = track_before_batch
-
-        batches = list(dl)
-        assert len(calls) == 2
-
-    def test_after_batch_hook(self):
-        """after_batch is called on each batch after collation."""
-        dataset = list(range(6))
-        dl = DataLoader(dataset, bs=3, num_workers=0)
-        calls = []
-
-        def track_after_batch(b):
-            calls.append(b)
-            return b
-        dl.after_batch = track_after_batch
-
-        batches = list(dl)
-        assert len(calls) == 2
-
-    def test_after_item_transforms_items(self):
-        """after_item can transform individual items."""
-        dataset = list(range(6))
-        dl = DataLoader(dataset, bs=3, num_workers=0)
-
-        def double(x):
-            return x * 2
-        dl.after_item = double
-
-        batches = list(dl)
-        all_items = torch.cat(batches).tolist()
-        assert sorted(all_items) == [0, 2, 4, 6, 8, 10]
-
-
-# ============================================================
 # Integration tests
 # ============================================================
 
 class TestDataLoaderIntegration:
     """End-to-end integration tests for DataLoader."""
-
-    def test_multiple_epochs_produce_different_order_when_shuffled(self):
-        """Multiple iterations with shuffle produce different orderings."""
-        dataset = list(range(100))
-        dl = DataLoader(dataset, bs=100, num_workers=0, shuffle=True)
-        epoch1 = list(dl)[0].tolist()
-        epoch2 = list(dl)[0].tolist()
-        # Different epochs should produce different orderings
-        # (astronomically unlikely to be the same for 100 items)
-        assert epoch1 != epoch2
-
-    def test_multiple_epochs_same_order_when_not_shuffled(self):
-        """Multiple iterations without shuffle produce the same ordering."""
-        dataset = list(range(20))
-        dl = DataLoader(dataset, bs=10, num_workers=0, shuffle=False)
-        epoch1 = [b.tolist() for b in dl]
-        epoch2 = [b.tolist() for b in dl]
-        assert epoch1 == epoch2
 
     def test_tensor_dataset(self):
         """DataLoader works with a TensorDataset-like indexed dataset."""
