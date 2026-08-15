@@ -74,12 +74,9 @@
     111 ./fastai/vision/models/xresnet.py
     105 ./fastai/vision/utils.py
     125 ./fastai/vision/widgets.py
-     14 ./nbs/dltest.py
      37 ./nbs/examples/dataloader_spawn.py
      16 ./nbs/examples/distrib.py
-     31 ./nbs/examples/distrib_pytorch.py
      36 ./nbs/examples/migrating_catalyst.py
-     29 ./nbs/examples/migrating_fastai.py
      93 ./nbs/examples/migrating_ignite.py
      44 ./nbs/examples/migrating_lightning.py
      68 ./nbs/examples/migrating_pytorch.py
@@ -108,5 +105,5 @@
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  25494 total
+  25420 total
 ```
