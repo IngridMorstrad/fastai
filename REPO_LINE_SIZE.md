@@ -39,7 +39,7 @@
     412 ./fastai/medical/imaging.py
       0 ./fastai/medical/__init__.py
     473 ./fastai/metrics.py
-   2682 ./fastai/_modidx.py
+   2667 ./fastai/_modidx.py
     497 ./fastai/optimizer.py
       6 ./fastai/tabular/all.py
     404 ./fastai/tabular/core.py
@@ -57,10 +57,10 @@
     173 ./fastai/text/models/core.py
       1 ./fastai/text/models/__init__.py
      13 ./fastai/torch_basics.py
-    903 ./fastai/torch_core.py
+    853 ./fastai/torch_core.py
       9 ./fastai/torch_imports.py
       9 ./fastai/vision/all.py
-   1266 ./fastai/vision/augment.py
+   1227 ./fastai/vision/augment.py
     309 ./fastai/vision/core.py
     221 ./fastai/vision/data.py
     406 ./fastai/vision/gan.py
@@ -108,5 +108,5 @@
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  25494 total
+  25390 total
 ```
