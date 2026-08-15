@@ -6,6 +6,7 @@
      11 ./fastai/callback/all.py
     112 ./fastai/callback/captum.py
      44 ./fastai/callback/channelslast.py
+     93 ./fastai/callback/comet.py
     189 ./fastai/callback/core.py
      73 ./fastai/callback/data.py
     246 ./fastai/callback/fp16.py
@@ -33,14 +34,16 @@
      85 ./fastai/imports.py
       2 ./fastai/__init__.py
     174 ./fastai/interpret.py
-    660 ./fastai/layers.py
+    468 ./fastai/layers.py
     682 ./fastai/learner.py
     281 ./fastai/losses.py
     412 ./fastai/medical/imaging.py
       0 ./fastai/medical/__init__.py
+     10 ./fastai/medical/text.py
     473 ./fastai/metrics.py
-   2682 ./fastai/_modidx.py
+   1760 ./fastai/_modidx.py
     497 ./fastai/optimizer.py
+     46 ./fastai/_pytorch_doc.py
       6 ./fastai/tabular/all.py
     404 ./fastai/tabular/core.py
      60 ./fastai/tabular/data.py
@@ -99,7 +102,7 @@
     719 ./tests/test_data_load.py
     699 ./tests/test_data_transforms.py
     296 ./tests/test_gradcam.py
-    475 ./tests/test_layers.py
+    404 ./tests/test_layers.py
     146 ./tests/test_lm_dataloader.py
     334 ./tests/test_losses.py
    1291 ./tests/test_metrics.py
@@ -108,5 +111,5 @@
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  25494 total
+  24458 total
 ```

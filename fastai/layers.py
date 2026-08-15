@@ -10,16 +10,15 @@ from .torch_core import *
 from torch.nn.utils import weight_norm, spectral_norm
 
 # %% auto 0
-__all__ = ['NormType', 'inplace_relu', 'Mish', 'Swish', 'module', 'Identity', 'Lambda', 'PartialLambda', 'Flatten',
-           'ToTensorBase', 'View', 'ResizeBatch', 'Debugger', 'sigmoid_range', 'SigmoidRange', 'AdaptiveConcatPool1d',
-           'AdaptiveConcatPool2d', 'PoolType', 'adaptive_pool', 'PoolFlatten', 'BatchNorm', 'InstanceNorm',
-           'BatchNorm1dFlat', 'LinBnDrop', 'sigmoid', 'sigmoid_', 'vleaky_relu', 'init_default', 'init_linear',
+__all__ = ['NormType', 'inplace_relu', 'Mish', 'Swish', 'module', 'Identity', 'Lambda', 'Flatten',
+           'ToTensorBase', 'Debugger', 'sigmoid_range', 'SigmoidRange', 'AdaptiveConcatPool1d',
+           'AdaptiveConcatPool2d', 'PoolType', 'adaptive_pool', 'BatchNorm', 'InstanceNorm',
+           'LinBnDrop', 'sigmoid', 'init_default', 'init_linear',
            'ConvLayer', 'AdaptiveAvgPool', 'MaxPool', 'AvgPool', 'trunc_normal_', 'Embedding', 'SelfAttention',
-           'PooledSelfAttention2d', 'SimpleSelfAttention', 'icnr_init', 'PixelShuffle_ICNR', 'sequential',
-           'SequentialEx', 'MergeLayer', 'Cat', 'SimpleCNN', 'ProdLayer', 'SEModule', 'ResBlock', 'SEBlock',
-           'SEResNeXtBlock', 'SeparableBlock', 'TimeDistributed', 'swish', 'SwishJit', 'MishJitAutoFn', 'mish',
-           'MishJit', 'ParameterModule', 'children_and_parameters', 'has_children', 'flatten_model', 'NoneReduce',
-           'in_channels']
+           'SimpleSelfAttention', 'icnr_init', 'PixelShuffle_ICNR', 'sequential',
+           'SequentialEx', 'MergeLayer', 'ProdLayer', 'SEModule', 'ResBlock', 'SEBlock',
+           'SEResNeXtBlock', 'ParameterModule', 'children_and_parameters', 'has_children', 'flatten_model',
+           'NoneReduce', 'in_channels']
 
 # %% ../nbs/01_layers.ipynb 6
 def module(*flds, **defaults):
@@ -57,16 +56,6 @@ def Lambda(self, x):
     "An easy way to create a pytorch layer for a simple `func`"
     return self.func(x)
 
-# %% ../nbs/01_layers.ipynb 11
-class PartialLambda(Lambda):
-    "Layer that applies `partial(func, **kwargs)`"
-    def __init__(self, func, **kwargs):
-        super().__init__(partial(func, **kwargs))
-        self.repr = f'{func.__name__}, {kwargs}'
-
-    def forward(self, x): return self.func(x)
-    def __repr__(self): return f'{self.__class__.__name__}({self.repr})'
-
 # %% ../nbs/01_layers.ipynb 13
 @module(full=False)
 def Flatten(self, x):
@@ -78,18 +67,6 @@ def Flatten(self, x):
 def ToTensorBase(self, x):
     "Convert x to TensorBase class"
     return self.tensor_cls(x)
-
-# %% ../nbs/01_layers.ipynb 17
-class View(Module):
-    "Reshape `x` to `size`"
-    def __init__(self, *size): self.size = size
-    def forward(self, x): return x.view(self.size)
-
-# %% ../nbs/01_layers.ipynb 19
-class ResizeBatch(Module):
-    "Reshape `x` to `size`, keeping batch dim the same size"
-    def __init__(self, *size): self.size = size
-    def forward(self, x): return x.view((x.size(0),) + self.size)
 
 # %% ../nbs/01_layers.ipynb 21
 @module()
@@ -134,11 +111,6 @@ class PoolType: Avg,Max,Cat = 'Avg','Max','Cat'
 def adaptive_pool(pool_type):
     return nn.AdaptiveAvgPool2d if pool_type=='Avg' else nn.AdaptiveMaxPool2d if pool_type=='Max' else AdaptiveConcatPool2d
 
-# %% ../nbs/01_layers.ipynb 33
-class PoolFlatten(nn.Sequential):
-    "Combine `nn.AdaptiveAvgPool2d` and `Flatten`."
-    def __init__(self, pool_type=PoolType.Avg): super().__init__(adaptive_pool(pool_type)(1), Flatten())
-
 # %% ../nbs/01_layers.ipynb 36
 NormType = Enum('NormType', 'Batch BatchZero Weight Spectral Instance InstanceZero')
 
@@ -164,15 +136,6 @@ def InstanceNorm(nf, ndim=2, norm_type=NormType.Instance, affine=True, **kwargs)
     "InstanceNorm layer with `nf` features and `ndim` initialized depending on `norm_type`."
     return _get_norm('InstanceNorm', nf, ndim, zero=norm_type==NormType.InstanceZero, affine=affine, **kwargs)
 
-# %% ../nbs/01_layers.ipynb 45
-class BatchNorm1dFlat(nn.BatchNorm1d):
-    "`nn.BatchNorm1d`, but first flattens leading dimensions"
-    def forward(self, x):
-        if x.dim()==2: return super().forward(x)
-        *f,l = x.shape
-        x = x.contiguous().view(-1,l)
-        return super().forward(x).view(*f,l)
-
 # %% ../nbs/01_layers.ipynb 47
 class LinBnDrop(nn.Sequential):
     "Module grouping `BatchNorm1d`, `Dropout` and `Linear` layers"
@@ -189,25 +152,15 @@ def sigmoid(input, eps=1e-7):
     "Same as `torch.sigmoid`, plus clamping to `(eps,1-eps)"
     return input.sigmoid().clamp(eps,1-eps)
 
-# %% ../nbs/01_layers.ipynb 52
-def sigmoid_(input, eps=1e-7):
-    "Same as `torch.sigmoid_`, plus clamping to `(eps,1-eps)"
-    return input.sigmoid_().clamp_(eps,1-eps)
-
 # %% ../nbs/01_layers.ipynb 53
 from torch.nn.init import kaiming_uniform_,xavier_uniform_,normal_
-
-# %% ../nbs/01_layers.ipynb 54
-def vleaky_relu(input, inplace=True):
-    "`F.leaky_relu` with 0.3 slope"
-    return F.leaky_relu(input, negative_slope=0.3, inplace=inplace)
 
 # %% ../nbs/01_layers.ipynb 55
 for o in F.relu,nn.ReLU,F.relu6,nn.ReLU6,F.leaky_relu,nn.LeakyReLU:
     o.__default_init__ = kaiming_uniform_
 
 # %% ../nbs/01_layers.ipynb 56
-for o in F.sigmoid,nn.Sigmoid,F.tanh,nn.Tanh,sigmoid,sigmoid_:
+for o in F.sigmoid,nn.Sigmoid,F.tanh,nn.Tanh,sigmoid:
     o.__default_init__ = xavier_uniform_
 
 # %% ../nbs/01_layers.ipynb 57
@@ -313,27 +266,6 @@ class SelfAttention(Module):
         o = self.gamma * torch.bmm(h, beta) + x
         return o.view(*size).contiguous()
 
-# %% ../nbs/01_layers.ipynb 95
-class PooledSelfAttention2d(Module):
-    "Pooled self attention layer for 2d."
-    def __init__(self, n_channels):
-        self.n_channels = n_channels
-        self.query,self.key,self.value = [self._conv(n_channels, c) for c in (n_channels//8,n_channels//8,n_channels//2)]
-        self.out   = self._conv(n_channels//2, n_channels)
-        self.gamma = nn.Parameter(tensor([0.]))
-
-    def _conv(self,n_in,n_out):
-        return ConvLayer(n_in, n_out, ks=1, norm_type=NormType.Spectral, act_cls=None, bias=False)
-
-    def forward(self, x):
-        n_ftrs = x.shape[2]*x.shape[3]
-        f = self.query(x).view(-1, self.n_channels//8, n_ftrs)
-        g = F.max_pool2d(self.key(x),   [2,2]).view(-1, self.n_channels//8, n_ftrs//4)
-        h = F.max_pool2d(self.value(x), [2,2]).view(-1, self.n_channels//2, n_ftrs//4)
-        beta = F.softmax(torch.bmm(f.transpose(1, 2), g), -1)
-        o = self.out(torch.bmm(h, beta.transpose(1,2)).view(-1, self.n_channels//2, x.shape[2], x.shape[3]))
-        return self.gamma * o + x
-
 # %% ../nbs/01_layers.ipynb 97
 def _conv1d_spect(ni:int, no:int, ks:int=1, stride:int=1, padding:int=0, bias:bool=False):
     "Create and initialize a `nn.Conv1d` layer with spectral normalization."
@@ -425,26 +357,6 @@ class MergeLayer(Module):
     def __init__(self, dense:bool=False): self.dense=dense
     def forward(self, x): return torch.cat([x,x.orig], dim=1) if self.dense else (x+x.orig)
 
-# %% ../nbs/01_layers.ipynb 118
-class Cat(nn.ModuleList):
-    "Concatenate layers outputs over a given dim"
-    def __init__(self, layers, dim=1):
-        self.dim=dim
-        super().__init__(layers)
-    def forward(self, x): return torch.cat([l(x) for l in self], dim=self.dim)
-
-# %% ../nbs/01_layers.ipynb 121
-class SimpleCNN(nn.Sequential):
-    "Create a simple CNN with `filters`."
-    def __init__(self, filters, kernel_szs=None, strides=None, bn=True):
-        nl = len(filters)-1
-        kernel_szs = ifnone(kernel_szs, [3]*nl)
-        strides    = ifnone(strides   , [2]*nl)
-        layers = [ConvLayer(filters[i], filters[i+1], kernel_szs[i], stride=strides[i],
-                  norm_type=(NormType.Batch if bn and i<nl-1 else None)) for i in range(nl)]
-        layers.append(PoolFlatten())
-        super().__init__(*layers)
-
 # %% ../nbs/01_layers.ipynb 128
 class ProdLayer(Module):
     "Merge a shortcut with the result of the module by multiplying them."
@@ -501,116 +413,12 @@ def SEResNeXtBlock(expansion, ni, nf, groups=32, reduction=16, stride=1, base_wi
     w = math.floor(nf * (base_width / 64)) * groups
     return ResBlock(expansion, ni, nf, stride=stride, groups=groups, reduction=reduction, nh2=w, **kwargs)
 
-# %% ../nbs/01_layers.ipynb 135
-def SeparableBlock(expansion, ni, nf, reduction=16, stride=1, base_width=4, **kwargs):
-    return ResBlock(expansion, ni, nf, stride=stride, reduction=reduction, nh2=nf*2, dw=True, **kwargs)
-
-# %% ../nbs/01_layers.ipynb 138
-def _stack_tups(tuples, stack_dim=1):
-    "Stack tuple of tensors along `stack_dim`"
-    return tuple(torch.stack([t[i] for t in tuples], dim=stack_dim) for i in range_of(tuples[0]))
-
-# %% ../nbs/01_layers.ipynb 139
-class TimeDistributed(Module):
-    "Applies `module` over `tdim` identically for each step, use `low_mem` to compute one at a time." 
-    def __init__(self, module, low_mem=False, tdim=1):
-        store_attr()
-        
-    def forward(self, *tensors, **kwargs):
-        "input x with shape:(bs,seq_len,channels,width,height)"
-        if self.low_mem or self.tdim!=1: 
-            return self.low_mem_forward(*tensors, **kwargs)
-        else:
-            #only support tdim=1
-            inp_shape = tensors[0].shape
-            bs, seq_len = inp_shape[0], inp_shape[1]   
-            out = self.module(*[x.view(bs*seq_len, *x.shape[2:]) for x in tensors], **kwargs)
-        return self.format_output(out, bs, seq_len)
-    
-    def low_mem_forward(self, *tensors, **kwargs):                                           
-        "input x with shape:(bs,seq_len,channels,width,height)"
-        seq_len = tensors[0].shape[self.tdim]
-        args_split = [torch.unbind(x, dim=self.tdim) for x in tensors]
-        out = []
-        for i in range(seq_len):
-            out.append(self.module(*[args[i] for args in args_split]), **kwargs)
-        if isinstance(out[0], tuple):
-            return _stack_tups(out, stack_dim=self.tdim)
-        return torch.stack(out, dim=self.tdim)
-    
-    def format_output(self, out, bs, seq_len):
-        "unstack from batchsize outputs"
-        if isinstance(out, tuple):
-            return tuple(out_i.view(bs, seq_len, *out_i.shape[1:]) for out_i in out)
-        return out.view(bs, seq_len,*out.shape[1:])
-    
-    def __repr__(self):
-        return f'TimeDistributed({self.module})'
-
-# %% ../nbs/01_layers.ipynb 158
-from torch.jit import script
-
-# %% ../nbs/01_layers.ipynb 159
-@script
-def _swish_jit_fwd(x): return x.mul(torch.sigmoid(x))
-
-@script
-def _swish_jit_bwd(x, grad_output):
-    x_sigmoid = torch.sigmoid(x)
-    return grad_output * (x_sigmoid * (1 + x * (1 - x_sigmoid)))
-
-class _SwishJitAutoFn(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, x):
-        ctx.save_for_backward(x)
-        return _swish_jit_fwd(x)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        x = ctx.saved_variables[0]
-        return _swish_jit_bwd(x, grad_output)
-
-# %% ../nbs/01_layers.ipynb 160
-def swish(x, inplace=False): F.silu(x, inplace=inplace)
-
-# %% ../nbs/01_layers.ipynb 161
-class SwishJit(Module):
-    def forward(self, x): return _SwishJitAutoFn.apply(x)
-
-# %% ../nbs/01_layers.ipynb 162
-@script
-def _mish_jit_fwd(x): return x.mul(torch.tanh(F.softplus(x)))
-
-@script
-def _mish_jit_bwd(x, grad_output):
-    x_sigmoid = torch.sigmoid(x)
-    x_tanh_sp = F.softplus(x).tanh()
-    return grad_output.mul(x_tanh_sp + x * x_sigmoid * (1 - x_tanh_sp * x_tanh_sp))
-
-class MishJitAutoFn(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, x):
-        ctx.save_for_backward(x)
-        return _mish_jit_fwd(x)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        x = ctx.saved_variables[0]
-        return _mish_jit_bwd(x, grad_output)
-
-# %% ../nbs/01_layers.ipynb 163
-def mish(x, inplace=False): return F.mish(x, inplace=inplace)
-
-# %% ../nbs/01_layers.ipynb 164
-class MishJit(Module):
-    def forward(self, x): return MishJitAutoFn.apply(x)
-
 # %% ../nbs/01_layers.ipynb 165
 Mish = nn.Mish
 Swish = nn.SiLU
 
 # %% ../nbs/01_layers.ipynb 166
-for o in swish,Swish,SwishJit,mish,Mish,MishJit: o.__default_init__ = kaiming_uniform_
+for o in Swish,Mish: o.__default_init__ = kaiming_uniform_
 
 # %% ../nbs/01_layers.ipynb 169
 class ParameterModule(Module):

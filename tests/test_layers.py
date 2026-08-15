@@ -11,14 +11,14 @@ import torch.nn as nn
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.layers import (
-    Identity, Lambda, PartialLambda, Flatten, View, ResizeBatch,
+    Identity, Lambda, Flatten,
     sigmoid_range, SigmoidRange,
     AdaptiveConcatPool1d, AdaptiveConcatPool2d,
-    PoolType, adaptive_pool, PoolFlatten,
-    NormType, BatchNorm, InstanceNorm, BatchNorm1dFlat,
+    PoolType, adaptive_pool,
+    NormType, BatchNorm, InstanceNorm,
     LinBnDrop, ConvLayer, AdaptiveAvgPool, MaxPool, AvgPool,
-    trunc_normal_, Embedding, sigmoid, sigmoid_,
-    vleaky_relu, init_default,
+    trunc_normal_, Embedding, sigmoid,
+    init_default,
     ParameterModule, children_and_parameters, has_children, flatten_model,
 )
 
@@ -64,31 +64,6 @@ class TestLambda:
 
 
 # ============================================================
-# Tests for PartialLambda layer
-# ============================================================
-
-class TestPartialLambda:
-    """Tests for the PartialLambda layer."""
-
-    def test_forward_with_kwargs(self):
-        def scale(x, factor=1.0):
-            return x * factor
-
-        layer = PartialLambda(scale, factor=3.0)
-        x = torch.tensor([1.0, 2.0])
-        result = layer(x)
-        expected = torch.tensor([3.0, 6.0])
-        assert torch.equal(result, expected)
-
-    def test_repr(self):
-        def my_func(x, a=1):
-            return x + a
-
-        layer = PartialLambda(my_func, a=5)
-        assert 'my_func' in repr(layer)
-
-
-# ============================================================
 # Tests for Flatten layer
 # ============================================================
 
@@ -106,26 +81,6 @@ class TestFlatten:
         x = torch.randn(4, 3, 8, 8)
         result = layer(x)
         assert result.shape == (4 * 3 * 8 * 8,)
-
-
-# ============================================================
-# Tests for View and ResizeBatch
-# ============================================================
-
-class TestViewAndResizeBatch:
-    """Tests for View and ResizeBatch layers."""
-
-    def test_view(self):
-        layer = View(2, 6)
-        x = torch.randn(12)
-        result = layer(x)
-        assert result.shape == (2, 6)
-
-    def test_resize_batch(self):
-        layer = ResizeBatch(3, 4)
-        x = torch.randn(2, 12)
-        result = layer(x)
-        assert result.shape == (2, 3, 4)
 
 
 # ============================================================
@@ -225,12 +180,6 @@ class TestBatchNorm:
         inn = InstanceNorm(16, ndim=2)
         assert isinstance(inn, nn.InstanceNorm2d)
 
-    def test_batch_norm_1d_flat(self):
-        bn = BatchNorm1dFlat(8)
-        x = torch.randn(4, 3, 8)  # 3D input
-        result = bn(x)
-        assert result.shape == (4, 3, 8)
-
 
 # ============================================================
 # Tests for LinBnDrop
@@ -328,12 +277,6 @@ class TestPoolLayers:
         result = pool(x)
         assert result.shape == (2, 16, 4, 4)
 
-    def test_pool_flatten(self):
-        layer = PoolFlatten()
-        x = torch.randn(2, 16, 8, 8)
-        result = layer(x)
-        assert result.shape == (2, 16)
-
 
 # ============================================================
 # Tests for Embedding with truncated normal init
@@ -355,7 +298,7 @@ class TestEmbedding:
 
 
 # ============================================================
-# Tests for sigmoid and vleaky_relu
+# Tests for sigmoid
 # ============================================================
 
 class TestActivations:
@@ -368,20 +311,6 @@ class TestActivations:
         assert result[0] > 0
         assert result[2] < 1
         assert abs(result[1].item() - 0.5) < 1e-5
-
-    def test_sigmoid_inplace_clamped(self):
-        x = torch.tensor([-100.0, 0.0, 100.0])
-        result = sigmoid_(x)
-        assert result[0] > 0
-        assert result[2] < 1
-
-    def test_vleaky_relu(self):
-        x = torch.tensor([-1.0, 0.0, 1.0])
-        result = vleaky_relu(x, inplace=False)
-        # negative slope is 0.3
-        assert abs(result[0].item() - (-0.3)) < 1e-5
-        assert result[1].item() == 0.0
-        assert result[2].item() == 1.0
 
 
 # ============================================================
