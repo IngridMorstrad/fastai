@@ -11,7 +11,9 @@ __all__ = ['TensorBoardBaseCallback', 'TensorBoardCallback', 'TensorBoardProject
            'tensorboard_log']
 
 # %% ../../nbs/70a_callback.tensorboard.ipynb 18
+import tensorboard
 from torch.utils.tensorboard import SummaryWriter
+from .fp16 import ModelToHalf
 from .hook import hook_output
 
 # %% ../../nbs/70a_callback.tensorboard.ipynb 19
@@ -61,11 +63,13 @@ class TensorBoardCallback(TensorBoardBaseCallback):
             self.writer.add_graph(self.model, *self.xb)
 
     def after_batch(self):
+        if not self.run: return
         self.writer.add_scalar('train_loss', self.smooth_loss, self.train_iter)
         for i,h in enumerate(self.opt.hypers):
             for k,v in h.items(): self.writer.add_scalar(f'{k}_{i}', v, self.train_iter)
 
     def after_epoch(self):
+        if not self.run: return
         for n,v in zip(self.recorder.metric_names[2:-1], self.recorder.log[2:-1]):
             self.writer.add_scalar(n, v, self.train_iter)
         if self.log_preds:
@@ -109,6 +113,11 @@ def _add_projector_features(learn, hook, feat):
     if getattr(learn.dl, 'vocab', None):
         feat['lbl'] = learn.y if first_epoch else torch.cat((feat['lbl'], learn.y),0)
     return feat
+
+# %% ../../nbs/70a_callback.tensorboard.ipynb 27
+def _get_embeddings(model, layer):
+    layer = model[0].encoder if layer == None else layer
+    return layer.weight
 
 # %% ../../nbs/70a_callback.tensorboard.ipynb 28
 @typedispatch
