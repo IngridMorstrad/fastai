@@ -14,7 +14,7 @@ from collections.abc import MutableSequence
 __all__ = ['replacing_yield', 'mk_metric', 'save_model', 'load_model', 'SkipToEpoch', 'Learner', 'before_batch_cb',
            'load_learner', 'Metric', 'AvgMetric', 'AvgLoss', 'AvgSmoothLoss', 'ValueMetric', 'Recorder', 'CastToTensor',
            'CancelBackwardException', 'CancelStepException', 'CancelFitException', 'CancelEpochException',
-           'CancelTrainException', 'CancelValidException', 'CancelBatchException']
+           'CancelTrainException', 'CancelValidException', 'CancelBatchException', 'to_onnx']
 
 # %% ../nbs/13a_learner.ipynb 4
 _all_ = ['CancelBackwardException', 'CancelStepException','CancelFitException','CancelEpochException',
@@ -680,3 +680,52 @@ def tta(self:Learner, ds_idx=1, dl=None, n=4, item_tfms=None, batch_tfms=None, b
     if use_max: return torch.stack([preds, aug_preds], 0).max(0)[0],targs
     preds = (aug_preds,preds) if beta is None else torch.lerp(aug_preds, preds, beta)
     return preds,targs
+
+# %%
+@patch
+def to_onnx(self:Learner, fname='export.onnx', opset_version=None, dynamic_axes=True,
+             input_names=None, output_names=None, simplify=False, **kwargs):
+    "Export model to ONNX format with dynamic batch-size axes to `self.path/self.model_dir/fname`"
+    if rank_distrib(): return  # don't export if child proc
+    fname = Path(fname)
+    if not fname.suffix: fname = fname.with_suffix('.onnx')
+    fname_path = join_path_file(fname, self.path/self.model_dir, ext='.onnx')
+
+    # Get a dummy input batch (inputs only)
+    batch = self.dls.one_batch()
+    n_inp = getattr(self.dls, 'n_inp', 1)
+    dummy_inp = batch[:n_inp]
+    if len(dummy_inp) == 1: dummy_inp = dummy_inp[0]
+
+    # Set model to eval mode
+    model = get_model(self.model)
+    model.eval()
+
+    # Build default names
+    if input_names is None: input_names = [f'input_{i}' for i in range(n_inp)]
+    if output_names is None: output_names = ['output_0']
+
+    # Build dynamic_axes for batch dimension
+    dyn_axes = None
+    if dynamic_axes:
+        dyn_axes = {name: {0: 'batch_size'} for name in input_names + output_names}
+
+    torch.onnx.export(
+        model, dummy_inp, str(fname_path),
+        input_names=input_names, output_names=output_names,
+        dynamic_axes=dyn_axes, opset_version=opset_version, **kwargs
+    )
+
+    # Optionally simplify the model
+    if simplify:
+        try:
+            import onnx
+            from onnxsim import simplify as onnx_simplify
+            onnx_model = onnx.load(str(fname_path))
+            simplified_model, check = onnx_simplify(onnx_model)
+            if check: onnx.save(simplified_model, str(fname_path))
+        except ImportError:
+            import warnings
+            warnings.warn("onnxsim not installed; skipping ONNX simplification. Install with: pip install onnxsim")
+
+    return fname_path
