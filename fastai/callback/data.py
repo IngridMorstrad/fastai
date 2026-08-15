@@ -22,7 +22,10 @@ class WeightedDL(TfmdDL):
     "Weighted dataloader where `wgts` is used for the training set only"
     def __init__(self, dataset=None, bs=None, wgts=None, **kwargs):
         wgts = array([1.]*len(dataset) if wgts is None else wgts)
-        self.wgts = wgts/wgts.sum()
+        wgt_sum = wgts.sum()
+        if wgt_sum == 0:
+            raise ValueError("Cannot create WeightedDL with all-zero weights; at least one weight must be positive.")
+        self.wgts = wgts/wgt_sum
         super().__init__(dataset=dataset, bs=bs, **kwargs)
 
     def get_idxs(self):
