@@ -5,13 +5,9 @@ ImageGetter, RandomSplitter, IndexSplitter, EndSplitter, GrandparentSplitter,
 FuncSplitter, MaskSplitter, TrainTestSplitter, RandomSubsetSplitter,
 parent_label, RegexLabeller, CategoryMap, and Categorize.
 """
-import sys
-import os
 import tempfile
 import pytest
 from pathlib import Path
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.data.transforms import (
     _get_files,
