@@ -34,7 +34,7 @@
       2 ./fastai/__init__.py
     174 ./fastai/interpret.py
     660 ./fastai/layers.py
-    682 ./fastai/learner.py
+    714 ./fastai/learner.py
     281 ./fastai/losses.py
     412 ./fastai/medical/imaging.py
       0 ./fastai/medical/__init__.py
@@ -75,7 +75,6 @@
     105 ./fastai/vision/utils.py
     125 ./fastai/vision/widgets.py
      14 ./nbs/dltest.py
-     37 ./nbs/examples/dataloader_spawn.py
      16 ./nbs/examples/distrib.py
      31 ./nbs/examples/distrib_pytorch.py
      36 ./nbs/examples/migrating_catalyst.py
@@ -85,10 +84,6 @@
      68 ./nbs/examples/migrating_pytorch.py
      11 ./nbs/examples/mnist_blocks.py
      11 ./nbs/examples/mnist_items.py
-     87 ./nbs/examples/train_imagenette.py
-     40 ./nbs/examples/train_imdbclassifier.py
-     43 ./nbs/examples/train_tabular.py
-     46 ./nbs/examples/train_wt2.py
      63 ./setup.py
      10 ./tests/conftest.py
       0 ./tests/__init__.py
@@ -108,5 +103,5 @@
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  25494 total
+  25273 total
 ```
