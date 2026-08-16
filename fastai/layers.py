@@ -17,8 +17,8 @@ __all__ = ['NormType', 'inplace_relu', 'Mish', 'Swish', 'module', 'Identity', 'L
            'ConvLayer', 'AdaptiveAvgPool', 'MaxPool', 'AvgPool', 'trunc_normal_', 'Embedding', 'SelfAttention',
            'PooledSelfAttention2d', 'SimpleSelfAttention', 'icnr_init', 'PixelShuffle_ICNR', 'sequential',
            'SequentialEx', 'MergeLayer', 'Cat', 'SimpleCNN', 'ProdLayer', 'SEModule', 'ResBlock', 'SEBlock',
-           'SEResNeXtBlock', 'SeparableBlock', 'TimeDistributed', 'swish', 'SwishJit', 'MishJitAutoFn', 'mish',
-           'MishJit', 'ParameterModule', 'children_and_parameters', 'has_children', 'flatten_model', 'NoneReduce',
+           'SEResNeXtBlock', 'SeparableBlock', 'TimeDistributed', 'swish', 'mish',
+           'ParameterModule', 'children_and_parameters', 'has_children', 'flatten_model', 'NoneReduce',
            'in_channels']
 
 # %% ../nbs/01_layers.ipynb 6
@@ -548,77 +548,25 @@ class TimeDistributed(Module):
         return f'TimeDistributed({self.module})'
 
 # %% ../nbs/01_layers.ipynb 158
-from torch.jit import script
-
-# %% ../nbs/01_layers.ipynb 159
-@script
-def _swish_jit_fwd(x): return x.mul(torch.sigmoid(x))
-
-@script
-def _swish_jit_bwd(x, grad_output):
-    x_sigmoid = torch.sigmoid(x)
-    return grad_output * (x_sigmoid * (1 + x * (1 - x_sigmoid)))
-
-class _SwishJitAutoFn(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, x):
-        ctx.save_for_backward(x)
-        return _swish_jit_fwd(x)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        x = ctx.saved_variables[0]
-        return _swish_jit_bwd(x, grad_output)
-
-# %% ../nbs/01_layers.ipynb 160
 def swish(x, inplace=False): F.silu(x, inplace=inplace)
 
-# %% ../nbs/01_layers.ipynb 161
-class SwishJit(Module):
-    def forward(self, x): return _SwishJitAutoFn.apply(x)
-
-# %% ../nbs/01_layers.ipynb 162
-@script
-def _mish_jit_fwd(x): return x.mul(torch.tanh(F.softplus(x)))
-
-@script
-def _mish_jit_bwd(x, grad_output):
-    x_sigmoid = torch.sigmoid(x)
-    x_tanh_sp = F.softplus(x).tanh()
-    return grad_output.mul(x_tanh_sp + x * x_sigmoid * (1 - x_tanh_sp * x_tanh_sp))
-
-class MishJitAutoFn(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, x):
-        ctx.save_for_backward(x)
-        return _mish_jit_fwd(x)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        x = ctx.saved_variables[0]
-        return _mish_jit_bwd(x, grad_output)
-
-# %% ../nbs/01_layers.ipynb 163
+# %% ../nbs/01_layers.ipynb 159
 def mish(x, inplace=False): return F.mish(x, inplace=inplace)
 
-# %% ../nbs/01_layers.ipynb 164
-class MishJit(Module):
-    def forward(self, x): return MishJitAutoFn.apply(x)
-
-# %% ../nbs/01_layers.ipynb 165
+# %% ../nbs/01_layers.ipynb 160
 Mish = nn.Mish
 Swish = nn.SiLU
 
-# %% ../nbs/01_layers.ipynb 166
-for o in swish,Swish,SwishJit,mish,Mish,MishJit: o.__default_init__ = kaiming_uniform_
+# %% ../nbs/01_layers.ipynb 161
+for o in swish,Swish,mish,Mish: o.__default_init__ = kaiming_uniform_
 
-# %% ../nbs/01_layers.ipynb 169
+# %% ../nbs/01_layers.ipynb 164
 class ParameterModule(Module):
     "Register a lone parameter `p` in a module."
     def __init__(self, p): self.val = p
     def forward(self, x): return x
 
-# %% ../nbs/01_layers.ipynb 170
+# %% ../nbs/01_layers.ipynb 165
 def children_and_parameters(m):
     "Return the children of `m` and its direct parameters not registered in modules."
     children = list(m.children())
@@ -627,18 +575,18 @@ def children_and_parameters(m):
         if id(p) not in children_p: children.append(ParameterModule(p))
     return children
 
-# %% ../nbs/01_layers.ipynb 172
+# %% ../nbs/01_layers.ipynb 167
 def has_children(m):
     try: next(m.children())
     except StopIteration: return False
     return True
 
-# %% ../nbs/01_layers.ipynb 174
+# %% ../nbs/01_layers.ipynb 169
 def flatten_model(m):
     "Return the list of all submodules and parameters of `m`"
     return sum(map(flatten_model,children_and_parameters(m)),[]) if has_children(m) else [m]
 
-# %% ../nbs/01_layers.ipynb 176
+# %% ../nbs/01_layers.ipynb 171
 class NoneReduce():
     "A context manager to evaluate `loss_func` with none reduce."
     def __init__(self, loss_func): self.loss_func,self.old_red = loss_func,None
@@ -653,7 +601,7 @@ class NoneReduce():
     def __exit__(self, type, value, traceback):
         if self.old_red is not None: self.loss_func.reduction = self.old_red
 
-# %% ../nbs/01_layers.ipynb 178
+# %% ../nbs/01_layers.ipynb 173
 def in_channels(m):
     "Return the shape of the first weight layer in `m`."
     try: return next(l.weight.shape[1] for l in flatten_model(m) if nested_attr(l,'weight.ndim',-1)==4)
