@@ -5,6 +5,7 @@
 # %% ../../nbs/14_callback.schedule.ipynb 2
 from __future__ import annotations
 from ..basics import *
+from .tracker import SaveModelCallback
 
 # %% auto 0
 __all__ = ['annealer', 'sched_lin', 'sched_cos', 'sched_no', 'sched_exp', 'SchedLin', 'SchedCos', 'SchedNo', 'SchedExp',
@@ -25,6 +26,22 @@ def annealer(f):
     @functools.wraps(f)
     def _inner(start, end): return _Annealer(f, start, end)
     return _inner
+
+# %% ../../nbs/14_callback.schedule.ipynb 11
+#TODO Jeremy, make this pickle
+#@annealer
+#def SchedLin(start, end, pos): return start + pos*(end-start)
+#@annealer
+#def SchedCos(start, end, pos): return start + (1 + math.cos(math.pi*(1-pos))) * (end-start) / 2
+#@annealer
+#def SchedNo (start, end, pos): return start
+#@annealer
+#def SchedExp(start, end, pos): return start * (end/start) ** pos
+#
+#SchedLin.__doc__ = "Linear schedule function from `start` to `end`"
+#SchedCos.__doc__ = "Cosine schedule function from `start` to `end`"
+#SchedNo .__doc__ = "Constant schedule function with `start` value"
+#SchedExp.__doc__ = "Exponential schedule function from `start` to `end`"
 
 # %% ../../nbs/14_callback.schedule.ipynb 12
 def sched_lin(start, end, pos): return start + pos*(end-start)
@@ -134,7 +151,7 @@ def fit_sgdr(self:Learner, n_cycles, cycle_len, lr_max=None, cycle_mult=2, cbs=N
     if self.opt is None: self.create_opt()
     self.opt.set_hyper('lr', self.lr if lr_max is None else lr_max)
     lr_max = np.array([h['lr'] for h in self.opt.hypers])
-    n_epoch = cycle_len * n_cycles if cycle_mult == 1 else cycle_len * (cycle_mult**n_cycles-1)//(cycle_mult-1)
+    n_epoch = cycle_len * (cycle_mult**n_cycles-1)//(cycle_mult-1)
     pcts = [cycle_len * cycle_mult**i / n_epoch for i in range(n_cycles)]
     scheds = [SchedCos(lr_max, 0) for _ in range(n_cycles)]
     scheds = {'lr': combine_scheds(pcts, scheds)}
