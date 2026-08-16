@@ -3,12 +3,8 @@
 Covers custom layers: Identity, Lambda, Flatten, SigmoidRange,
 ConvLayer, AdaptiveConcatPool, BatchNorm, LinBnDrop, ParameterModule, etc.
 """
-import sys
-import os
 import torch
 import torch.nn as nn
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.layers import (
     Identity, Lambda, PartialLambda, Flatten, View, ResizeBatch,
