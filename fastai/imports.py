@@ -6,7 +6,6 @@ import multiprocessing,threading,urllib,tempfile,concurrent.futures,matplotlib,w
 
 from concurrent.futures import as_completed
 from functools import partial,reduce
-from itertools import starmap,dropwhile,takewhile,zip_longest
 from copy import copy,deepcopy
 from multiprocessing import Lock,Process,Queue,queues
 from datetime import datetime
@@ -16,10 +15,8 @@ from typing import Union,Optional,TypeVar,Callable,Any
 from types import SimpleNamespace
 from pathlib import Path
 from collections import OrderedDict,defaultdict,Counter,namedtuple
-from enum import Enum,IntEnum
-from textwrap import TextWrapper
-from operator import itemgetter,attrgetter,methodcaller
-from urllib.request import urlopen
+from enum import Enum
+from operator import itemgetter,attrgetter
 from numbers import Number, Real
 
 # External modules
@@ -31,13 +28,7 @@ from pdb import set_trace
 from fastcore.all import *
 from fastprogress.fastprogress import progress_bar,master_bar
 
-try:
-    from types import WrapperDescriptorType,MethodWrapperType,MethodDescriptorType
-except ImportError:
-    WrapperDescriptorType = type(object.__init__)
-    MethodWrapperType = type(object().__str__)
-    MethodDescriptorType = type(str.join)
-from types import BuiltinFunctionType,BuiltinMethodType,MethodType,FunctionType,LambdaType
+from types import MethodType,LambdaType
 
 pd.options.display.max_colwidth = 600
 NoneType = type(None)
