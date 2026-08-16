@@ -717,3 +717,155 @@ class TestDataLoaderIntegration:
         batches = list(dl)
         assert len(batches) == 1
         assert batches[0].shape == (5,)
+
+
+# ============================================================
+# Tests for DataLoader prebatched mode (bs=None)
+# ============================================================
+
+class TestDataLoaderPrebatched:
+    """Tests for DataLoader with prebatched data (bs=None)."""
+
+    def test_prebatched_property(self):
+        """prebatched is True when bs is None."""
+        ds = [[1, 2, 3], [4, 5, 6]]
+        dl = DataLoader(ds, bs=None)
+        assert dl.prebatched is True
+
+    def test_not_prebatched(self):
+        """prebatched is False when bs is set."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        assert dl.prebatched is False
+
+    def test_prebatched_iteration(self):
+        """Prebatched DataLoader applies fa_convert instead of fa_collate."""
+        ds = [np.array([1.0, 2.0]), np.array([3.0, 4.0])]
+        dl = DataLoader(ds, bs=None)
+        batches = list(dl)
+        assert len(batches) == 2
+        # Each batch is a converted numpy array (now a tensor)
+        assert isinstance(batches[0], torch.Tensor)
+        assert torch.equal(batches[0], torch.tensor([1.0, 2.0]))
+
+    def test_prebatched_len(self):
+        """len of prebatched DataLoader equals n."""
+        ds = [[1, 2], [3, 4], [5, 6], [7, 8]]
+        dl = DataLoader(ds, bs=None)
+        assert len(dl) == 4
+
+
+# ============================================================
+# Tests for SkipItemException handling in do_item
+# ============================================================
+
+class TestSkipItemHandling:
+    """Tests for SkipItemException handling during iteration."""
+
+    def test_do_item_returns_none_on_skip(self):
+        """do_item returns None when SkipItemException is raised."""
+        ds = list(range(5))
+        dl = DataLoader(ds, bs=2)
+
+        def after_item_that_skips(x):
+            if x == 2:
+                raise SkipItemException()
+            return x
+
+        dl.after_item = after_item_that_skips
+        result = dl.do_item(2)
+        assert result is None
+
+    def test_do_item_normal_return(self):
+        """do_item returns the item when no exception is raised."""
+        ds = list(range(5))
+        dl = DataLoader(ds, bs=2)
+        result = dl.do_item(0)
+        assert result == 0
+
+    def test_skip_item_during_iteration(self):
+        """Items that raise SkipItemException are filtered out during iteration."""
+        ds = list(range(6))
+        dl = DataLoader(ds, bs=2, shuffle=False)
+
+        def skip_odds(x):
+            if x % 2 != 0:
+                raise SkipItemException()
+            return x
+
+        dl.after_item = skip_odds
+        batches = list(dl)
+        # Only even items remain: 0, 2, 4 -> one batch of 2 and one partial of 1
+        all_items = torch.cat(batches).tolist()
+        assert all_items == [0, 2, 4]
+
+
+# ============================================================
+# Tests for DataLoader construction parameters
+# ============================================================
+
+class TestDataLoaderConstruction:
+    """Tests for DataLoader initialization with various parameters."""
+
+    def test_construction_with_shuffle(self):
+        """DataLoader can be constructed with shuffle=True for indexed datasets."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, shuffle=True)
+        assert dl.shuffle is True
+
+    def test_construction_with_drop_last(self):
+        """DataLoader can be constructed with drop_last=True."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=3, drop_last=True)
+        assert dl.drop_last is True
+
+    def test_construction_indexed_explicit(self):
+        """DataLoader accepts explicit indexed parameter."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, indexed=False)
+        assert dl.indexed is False
+
+    def test_construction_with_device(self):
+        """DataLoader can be constructed with a device parameter."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, device='cpu')
+        assert dl.device == torch.device('cpu')
+
+    def test_construction_bs_none_is_prebatched(self):
+        """When bs is None, the DataLoader is in prebatched mode."""
+        ds = [[1, 2, 3], [4, 5, 6]]
+        dl = DataLoader(ds, bs=None)
+        assert dl.prebatched is True
+
+
+# ============================================================
+# Tests for DataLoader.create_item
+# ============================================================
+
+class TestDataLoaderCreateItem:
+    """Tests for DataLoader.create_item method."""
+
+    def test_create_item_indexed(self):
+        """With indexed dataset, create_item should return dataset[s]."""
+        ds = [10, 20, 30, 40, 50]
+        dl = DataLoader(ds, bs=2)
+        assert dl.create_item(0) == 10
+        assert dl.create_item(2) == 30
+        assert dl.create_item(4) == 50
+
+    def test_create_item_non_indexed(self):
+        """With non-indexed dataset, create_item(None) should use the iterator."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False)
+        dl.it = iter([10, 20, 30])
+        assert dl.create_item(None) == 10
+        assert dl.create_item(None) == 20
+        assert dl.create_item(None) == 30
+
+    def test_create_item_non_indexed_raises_on_numeric_index(self):
+        """Non-indexed dataset should raise IndexError when given a numeric index."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False)
+        dl.it = iter([10, 20, 30])
+        with pytest.raises(IndexError, match="Cannot index an iterable dataset"):
+            dl.create_item(0)
