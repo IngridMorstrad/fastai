@@ -19,9 +19,8 @@ __all__ = ['norm_types', 'setup_cuda', 'subplots', 'show_image', 'show_titled_im
            'np_func', 'Module', 'get_model', 'one_hot', 'one_hot_decode', 'params', 'trainable_params',
            'norm_bias_params', 'batch_to_samples', 'logit', 'num_distrib', 'rank_distrib', 'distrib_barrier',
            'base_doc', 'doc', 'nested_reorder', 'flatten_check', 'make_cross_image', 'show_image_batch',
-           'requires_grad', 'init_default', 'cond_init', 'apply_leaf', 'apply_init', 'script_use_ctx',
-           'script_save_ctx', 'script_fwd', 'script_bwd', 'grad_module', 'ismin_torch', 'notmax_torch', 'progress_bar',
-           'master_bar']
+           'requires_grad', 'init_default', 'cond_init', 'apply_leaf', 'apply_init', 'ismin_torch', 'notmax_torch',
+           'progress_bar', 'master_bar']
 
 # %% ../nbs/00_torch_core.ipynb 5
 _all_ = ['progress_bar','master_bar']
@@ -840,46 +839,7 @@ def apply_init(m, func=nn.init.kaiming_normal_):
     "Initialize all non-batchnorm layers of `m` with `func`."
     apply_leaf(m, partial(cond_init, func=func))
 
-# %% ../nbs/00_torch_core.ipynb 220
-def script_use_ctx(f):
-    "Decorator: create jit script and pass everything in `ctx.saved_variables to `f`, after `*args`"
-    sf = torch.jit.script(f)
-    def _f(ctx, *args, **kwargs): return sf(*args, *ctx.saved_variables, **kwargs)
-    return update_wrapper(_f,f)
-
 # %% ../nbs/00_torch_core.ipynb 221
-def script_save_ctx(static, *argidx):
-    "Decorator: create jit script and save args with indices `argidx` using `ctx.save_for_backward`"
-    def _dec(f):
-        sf = torch.jit.script(f)
-        def _f(ctx, *args, **kwargs):
-            if argidx:
-                save = [args[o] for o in argidx]
-                ctx.save_for_backward(*save)
-            if not argidx: args = [ctx]+args
-            return sf(*args, **kwargs)
-        if static: _f = staticmethod(_f)
-        return update_wrapper(_f,f)
-    return _dec
-
-# %% ../nbs/00_torch_core.ipynb 222
-def script_fwd(*argidx):
-    "Decorator: create static jit script and save args with indices `argidx` using `ctx.save_for_backward`"
-    return script_save_ctx(True, *argidx)
-
-# %% ../nbs/00_torch_core.ipynb 223
-def script_bwd(f):
-    "Decorator: create static jit script and pass everything in `ctx.saved_variables to `f`, after `*args`"
-    return staticmethod(script_use_ctx(f))
-
-# %% ../nbs/00_torch_core.ipynb 224
-def grad_module(cls):
-    "Decorator: convert `cls` into an autograd function"
-    class _c(nn.Module):
-        def forward(self, *args, **kwargs): return cls.apply(*args, **kwargs)
-    return _c
-
-# %% ../nbs/00_torch_core.ipynb 226
 def ismin_torch(min_version):
     "Check if `torch.__version__` >= `min_version` using packaging.version"
     return _torch_version >= parse(min_version)
