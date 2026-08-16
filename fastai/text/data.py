@@ -201,6 +201,7 @@ class SortedDL(TfmdDL):
         return sorted(idxs, key=lambda i: self.res[i], reverse=True)
 
     def shuffle_fn(self,idxs):
+        if len(self.res) == 0: return idxs
         idxs = np.random.permutation(len(self.dataset))
         idx_max = np.where(idxs==self.idx_max)[0][0]
         idxs[0],idxs[idx_max] = idxs[idx_max],idxs[0]
