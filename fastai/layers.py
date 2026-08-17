@@ -17,9 +17,8 @@ __all__ = ['NormType', 'inplace_relu', 'Mish', 'Swish', 'module', 'Identity', 'L
            'ConvLayer', 'AdaptiveAvgPool', 'MaxPool', 'AvgPool', 'trunc_normal_', 'Embedding', 'SelfAttention',
            'PooledSelfAttention2d', 'SimpleSelfAttention', 'icnr_init', 'PixelShuffle_ICNR', 'sequential',
            'SequentialEx', 'MergeLayer', 'Cat', 'SimpleCNN', 'ProdLayer', 'SEModule', 'ResBlock', 'SEBlock',
-           'SEResNeXtBlock', 'SeparableBlock', 'TimeDistributed', 'swish', 'SwishJit', 'MishJitAutoFn', 'mish',
-           'MishJit', 'ParameterModule', 'children_and_parameters', 'has_children', 'flatten_model', 'NoneReduce',
-           'in_channels']
+           'SEResNeXtBlock', 'SeparableBlock', 'TimeDistributed', 'ParameterModule', 'children_and_parameters',
+           'has_children', 'flatten_model', 'NoneReduce', 'in_channels']
 
 # %% ../nbs/01_layers.ipynb 6
 def module(*flds, **defaults):
@@ -547,70 +546,12 @@ class TimeDistributed(Module):
     def __repr__(self):
         return f'TimeDistributed({self.module})'
 
-# %% ../nbs/01_layers.ipynb 158
-from torch.jit import script
-
-# %% ../nbs/01_layers.ipynb 159
-@script
-def _swish_jit_fwd(x): return x.mul(torch.sigmoid(x))
-
-@script
-def _swish_jit_bwd(x, grad_output):
-    x_sigmoid = torch.sigmoid(x)
-    return grad_output * (x_sigmoid * (1 + x * (1 - x_sigmoid)))
-
-class _SwishJitAutoFn(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, x):
-        ctx.save_for_backward(x)
-        return _swish_jit_fwd(x)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        x = ctx.saved_variables[0]
-        return _swish_jit_bwd(x, grad_output)
-
-# %% ../nbs/01_layers.ipynb 160
-def swish(x, inplace=False): F.silu(x, inplace=inplace)
-
-# %% ../nbs/01_layers.ipynb 161
-class SwishJit(Module):
-    def forward(self, x): return _SwishJitAutoFn.apply(x)
-
-# %% ../nbs/01_layers.ipynb 162
-@script
-def _mish_jit_fwd(x): return x.mul(torch.tanh(F.softplus(x)))
-
-@script
-def _mish_jit_bwd(x, grad_output):
-    x_sigmoid = torch.sigmoid(x)
-    x_tanh_sp = F.softplus(x).tanh()
-    return grad_output.mul(x_tanh_sp + x * x_sigmoid * (1 - x_tanh_sp * x_tanh_sp))
-
-class MishJitAutoFn(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, x):
-        ctx.save_for_backward(x)
-        return _mish_jit_fwd(x)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        x = ctx.saved_variables[0]
-        return _mish_jit_bwd(x, grad_output)
-
-# %% ../nbs/01_layers.ipynb 163
-def mish(x, inplace=False): return F.mish(x, inplace=inplace)
-
-# %% ../nbs/01_layers.ipynb 164
-class MishJit(Module):
-    def forward(self, x): return MishJitAutoFn.apply(x)
-
 # %% ../nbs/01_layers.ipynb 165
 Mish = nn.Mish
 Swish = nn.SiLU
 
 # %% ../nbs/01_layers.ipynb 166
-for o in swish,Swish,SwishJit,mish,Mish,MishJit: o.__default_init__ = kaiming_uniform_
+for o in Swish,Mish: o.__default_init__ = kaiming_uniform_
 
 # %% ../nbs/01_layers.ipynb 169
 class ParameterModule(Module):
