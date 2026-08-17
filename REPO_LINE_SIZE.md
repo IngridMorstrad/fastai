@@ -76,15 +76,12 @@
     125 ./fastai/vision/widgets.py
      14 ./nbs/dltest.py
      37 ./nbs/examples/dataloader_spawn.py
-     16 ./nbs/examples/distrib.py
      31 ./nbs/examples/distrib_pytorch.py
      36 ./nbs/examples/migrating_catalyst.py
      29 ./nbs/examples/migrating_fastai.py
      93 ./nbs/examples/migrating_ignite.py
      44 ./nbs/examples/migrating_lightning.py
      68 ./nbs/examples/migrating_pytorch.py
-     11 ./nbs/examples/mnist_blocks.py
-     11 ./nbs/examples/mnist_items.py
      87 ./nbs/examples/train_imagenette.py
      40 ./nbs/examples/train_imdbclassifier.py
      43 ./nbs/examples/train_tabular.py
@@ -108,5 +105,5 @@
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  25494 total
+  25456 total
 ```
