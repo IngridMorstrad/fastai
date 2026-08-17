@@ -9,7 +9,7 @@ from .load import *
 
 # %% auto 0
 __all__ = ['show_batch', 'show_results', 'TfmdDL', 'DataLoaders', 'FilteredBase', 'TfmdLists', 'decode_at', 'show_at', 'Datasets',
-           'test_set']
+           'test_set', 'ClassBalancedDL']
 
 # %% ../../nbs/03_data.core.ipynb 8
 @typedispatch
@@ -526,3 +526,55 @@ def test_dl(self:DataLoaders,
     test_ds = test_set(self.valid_ds, test_items, rm_tfms=rm_type_tfms, with_labels=with_labels
                       ) if isinstance(self.valid_ds, (Datasets, TfmdLists)) else test_items
     return self.valid.new(test_ds, **kwargs)
+
+# %% ../../nbs/03_data.core.ipynb 115
+@delegates(TfmdDL)
+class ClassBalancedDL(TfmdDL):
+    "A `TfmdDL` that uses inverse-frequency weighted sampling to balance classes in each batch"
+    def __init__(self,
+        dataset, # Map-style dataset (must be a `Datasets` with categorical targets or provide `labels`)
+        labels:list=None, # Explicit integer labels for each item (auto-extracted from dataset if None)
+        **kwargs
+    ):
+        super().__init__(dataset, **kwargs)
+        self._sample_weights = self._compute_weights(labels)
+
+    def _compute_weights(self, labels):
+        "Compute per-sample weights inversely proportional to class frequency"
+        if labels is None:
+            labels = self._extract_labels()
+        labels = tensor(labels).long()
+        class_counts = torch.bincount(labels)
+        # Inverse frequency: weight = total_samples / (num_classes * count_for_class)
+        n_classes = len(class_counts)
+        n_samples = len(labels)
+        weights_per_class = n_samples / (n_classes * class_counts.float())
+        return weights_per_class[labels].double()
+
+    def _extract_labels(self):
+        "Extract integer labels from a fastai Datasets object (uses the first target TfmdList)"
+        ds = self.dataset
+        if hasattr(ds, 'tls') and len(ds.tls) > 1:
+            # tls[1] is typically the target transform list in fastai Datasets
+            tl = ds.tls[1]
+            return [int(tl[i]) for i in range(len(tl))]
+        raise ValueError(
+            "Could not auto-extract labels from dataset. "
+            "Pass `labels` explicitly as a list of integer class indices."
+        )
+
+    def get_idxs(self):
+        "Use weighted random sampling when shuffling, standard indices otherwise"
+        if not self.shuffle:
+            return list(range(self.n))
+        # Weighted sampling with replacement to balance classes
+        n = self.n if self.n is not None else len(self._sample_weights)
+        return torch.multinomial(self._sample_weights, n, replacement=True).tolist()
+
+    @delegates(TfmdDL.new)
+    def new(self, dataset=None, **kwargs):
+        "Create new `ClassBalancedDL`, recomputing weights for the new dataset"
+        # When creating a validation DL from this, don't pass labels - let it extract or use standard
+        if 'labels' not in kwargs: kwargs['labels'] = None
+        return super().new(dataset=dataset, **kwargs)
+
