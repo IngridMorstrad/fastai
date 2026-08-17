@@ -4,15 +4,14 @@ import io,operator,sys,os,re,mimetypes,csv,itertools,json,shutil,glob,pickle,tar
 import hashlib,itertools,types,inspect,functools,random,time,math,bz2,typing,numbers,string
 import multiprocessing,threading,urllib,tempfile,concurrent.futures,matplotlib,warnings,zipfile
 
-from concurrent.futures import as_completed
 from functools import partial,reduce
 from itertools import starmap,dropwhile,takewhile,zip_longest
 from copy import copy,deepcopy
-from multiprocessing import Lock,Process,Queue,queues
+from multiprocessing import Lock,Process
 from datetime import datetime
 from contextlib import redirect_stdout,contextmanager
-from collections.abc import Iterable,Iterator,Generator,Sequence,MutableSequence,MutableMapping
-from typing import Union,Optional,TypeVar,Callable,Any
+from collections.abc import Iterable,Generator,Sequence,MutableSequence,MutableMapping
+from typing import Optional
 from types import SimpleNamespace
 from pathlib import Path
 from collections import OrderedDict,defaultdict,Counter,namedtuple
@@ -24,7 +23,7 @@ from numbers import Number, Real
 
 # External modules
 import requests,yaml,matplotlib.pyplot as plt,pandas as pd,scipy
-from pandas.api.types import CategoricalDtype,is_numeric_dtype
+from pandas.api.types import CategoricalDtype
 from numpy import array,ndarray
 from scipy import ndimage
 from pdb import set_trace
