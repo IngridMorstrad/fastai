@@ -4,21 +4,21 @@
      24 ./dev_nbs/course/crappify.py
       6 ./fastai/basics.py
      11 ./fastai/callback/all.py
-    112 ./fastai/callback/captum.py
+    113 ./fastai/callback/captum.py
      44 ./fastai/callback/channelslast.py
      93 ./fastai/callback/comet.py
     189 ./fastai/callback/core.py
      73 ./fastai/callback/data.py
-    246 ./fastai/callback/fp16.py
+    247 ./fastai/callback/fp16.py
     283 ./fastai/callback/hook.py
       1 ./fastai/callback/__init__.py
     113 ./fastai/callback/mixup.py
      20 ./fastai/callback/preds.py
     126 ./fastai/callback/progress.py
      44 ./fastai/callback/rnn.py
-    299 ./fastai/callback/schedule.py
-    167 ./fastai/callback/tensorboard.py
-    279 ./fastai/callback/tracker.py
+    316 ./fastai/callback/schedule.py
+    174 ./fastai/callback/tensorboard.py
+    141 ./fastai/callback/tracker.py
      59 ./fastai/callback/training.py
     324 ./fastai/callback/wandb.py
     104 ./fastai/collab.py
@@ -29,19 +29,19 @@
       1 ./fastai/data/__init__.py
     215 ./fastai/data/load.py
     384 ./fastai/data/transforms.py
-    224 ./fastai/distributed.py
+    225 ./fastai/distributed.py
      72 ./fastai/fp16_utils.py
      85 ./fastai/imports.py
       2 ./fastai/__init__.py
     174 ./fastai/interpret.py
     660 ./fastai/layers.py
-    682 ./fastai/learner.py
+    687 ./fastai/learner.py
     281 ./fastai/losses.py
     412 ./fastai/medical/imaging.py
       0 ./fastai/medical/__init__.py
      10 ./fastai/medical/text.py
     473 ./fastai/metrics.py
-   2682 ./fastai/_modidx.py
+   2692 ./fastai/_modidx.py
     497 ./fastai/optimizer.py
      46 ./fastai/_pytorch_doc.py
       6 ./fastai/tabular/all.py
@@ -50,23 +50,23 @@
       0 ./fastai/tabular/__init__.py
      56 ./fastai/tabular/learner.py
      81 ./fastai/tabular/model.py
-    165 ./fastai/test_utils.py
+    168 ./fastai/test_utils.py
       6 ./fastai/text/all.py
     381 ./fastai/text/core.py
-    290 ./fastai/text/data.py
+    288 ./fastai/text/data.py
       1 ./fastai/text/__init__.py
     305 ./fastai/text/learner.py
     183 ./fastai/text/models/awdlstm.py
     173 ./fastai/text/models/core.py
       1 ./fastai/text/models/__init__.py
      13 ./fastai/torch_basics.py
-    903 ./fastai/torch_core.py
+    865 ./fastai/torch_core.py
       7 ./fastai/torch_imports.py
       9 ./fastai/vision/all.py
-   1266 ./fastai/vision/augment.py
+   1267 ./fastai/vision/augment.py
     309 ./fastai/vision/core.py
     221 ./fastai/vision/data.py
-    406 ./fastai/vision/gan.py
+    422 ./fastai/vision/gan.py
     231 ./fastai/vision/gradcam.py
       1 ./fastai/vision/__init__.py
     362 ./fastai/vision/learner.py
@@ -111,5 +111,5 @@
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  25641 total
+  25525 total
 ```
