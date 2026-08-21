@@ -10,7 +10,7 @@ from .progress import *
 
 # %% auto 0
 __all__ = ['TerminateOnNaNCallback', 'TrackerCallback', 'EarlyStoppingCallback', 'MultiMetricEarlyStoppingCallback', 'SaveModelCallback',
-           'ReduceLROnPlateau', 'CheckpointAveragingCallback']
+           'ReduceLROnPlateau', 'CheckpointAveragingCallback', 'StochasticWeightAveraging']
 
 # %% ../../nbs/17_callback.tracker.ipynb 6
 class TerminateOnNaNCallback(Callback):
@@ -277,3 +277,69 @@ class CheckpointAveragingCallback(TrackerCallback):
             if self.save_averaged:
                 self.learn.save(self.fname)
         super().after_fit()
+
+# %%
+class StochasticWeightAveraging(Callback):
+    """A `Callback` that maintains an exponential moving average (EMA) of model weights.
+
+    During training, the EMA shadow weights are updated after each training batch.
+    Before validation, the current training weights are saved and the EMA weights are
+    loaded into the model. After validation, the training weights are restored so
+    training continues with the original (non-averaged) parameters.
+
+    At the end of training, the EMA weights are loaded as the final model weights
+    for improved generalization.
+    """
+    order = 65  # After TrackerCallback (60) but flexible ordering
+
+    def __init__(self,
+        decay=0.999, # EMA decay factor; higher values produce smoother averages.
+        start_epoch=0, # epoch index at which EMA accumulation begins (0 = from the start).
+        load_ema_at_end=True # if True, load EMA weights as the final model weights after training.
+    ):
+        self.decay = decay
+        self.start_epoch = start_epoch
+        self.load_ema_at_end = load_ema_at_end
+
+    def before_fit(self):
+        "Initialize EMA shadow weights as a copy of the current model parameters."
+        self.run = not hasattr(self, "lr_finder") and not hasattr(self, "gather_preds")
+        if not self.run: return
+        self.ema_state = copy.deepcopy(self.model.state_dict())
+        self._training_state = None
+
+    def after_batch(self):
+        "Update EMA shadow weights after each training batch."
+        if not self.run or not self.training: return
+        if self.epoch < self.start_epoch: return
+        decay = self.decay
+        current_state = self.model.state_dict()
+        for key in self.ema_state:
+            if self._is_floating_point(self.ema_state[key]):
+                self.ema_state[key] = decay * self.ema_state[key] + (1.0 - decay) * current_state[key]
+
+    def before_validate(self):
+        "Swap in EMA weights before validation."
+        if not self.run: return
+        self._training_state = copy.deepcopy(self.model.state_dict())
+        self.model.load_state_dict(self.ema_state)
+
+    def after_validate(self):
+        "Restore training weights after validation."
+        if not self.run or self._training_state is None: return
+        self.model.load_state_dict(self._training_state)
+        self._training_state = None
+
+    def after_fit(self):
+        "Optionally load EMA weights as the final model weights."
+        if not self.run: return
+        if self.load_ema_at_end:
+            self.model.load_state_dict(self.ema_state)
+
+    def _is_floating_point(self, tensor):
+        "Check if a tensor is floating-point."
+        if hasattr(tensor, 'is_floating_point'):
+            return tensor.is_floating_point()
+        if hasattr(tensor, 'dtype'):
+            return tensor.dtype.kind == 'f'
+        return True
