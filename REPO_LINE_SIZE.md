@@ -6,7 +6,6 @@
      11 ./fastai/callback/all.py
     112 ./fastai/callback/captum.py
      44 ./fastai/callback/channelslast.py
-     93 ./fastai/callback/comet.py
     189 ./fastai/callback/core.py
      73 ./fastai/callback/data.py
     246 ./fastai/callback/fp16.py
@@ -39,11 +38,9 @@
     281 ./fastai/losses.py
     412 ./fastai/medical/imaging.py
       0 ./fastai/medical/__init__.py
-     10 ./fastai/medical/text.py
     473 ./fastai/metrics.py
    2682 ./fastai/_modidx.py
     497 ./fastai/optimizer.py
-     46 ./fastai/_pytorch_doc.py
       6 ./fastai/tabular/all.py
     404 ./fastai/tabular/core.py
      60 ./fastai/tabular/data.py
@@ -80,7 +77,6 @@
      14 ./nbs/dltest.py
      37 ./nbs/examples/dataloader_spawn.py
      16 ./nbs/examples/distrib.py
-     31 ./nbs/examples/distrib_pytorch.py
      36 ./nbs/examples/migrating_catalyst.py
      29 ./nbs/examples/migrating_fastai.py
      93 ./nbs/examples/migrating_ignite.py
@@ -93,12 +89,11 @@
      43 ./nbs/examples/train_tabular.py
      46 ./nbs/examples/train_wt2.py
      63 ./setup.py
-     10 ./tests/conftest.py
+      9 ./tests/conftest.py
       0 ./tests/__init__.py
     344 ./tests/test_checkpoint_averaging.py
     370 ./tests/test_collab.py
     640 ./tests/test_data_loader.py
-    700 ./tests/test_dataloader.py
     719 ./tests/test_data_load.py
     699 ./tests/test_data_transforms.py
     296 ./tests/test_gradcam.py
@@ -111,5 +106,5 @@
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  25641 total
+  24760 total
 ```
