@@ -5,11 +5,12 @@
 # %% ../../nbs/14_callback.schedule.ipynb 2
 from __future__ import annotations
 from ..basics import *
+from .tracker import SaveModelCallback
 
 # %% auto 0
 __all__ = ['annealer', 'sched_lin', 'sched_cos', 'sched_no', 'sched_exp', 'SchedLin', 'SchedCos', 'SchedNo', 'SchedExp',
-           'SchedPoly', 'combine_scheds', 'combined_cos', 'ParamScheduler', 'LRFinder', 'valley', 'slide', 'minimum',
-           'steep', 'SuggestionMethod']
+           'SchedPoly', 'combine_scheds', 'combined_cos', 'ParamScheduler', 'LRWarmup', 'LRFinder', 'valley', 'slide',
+           'minimum', 'steep', 'SuggestionMethod']
 
 # %% ../../nbs/14_callback.schedule.ipynb 3
 _all_ = ['SuggestionMethod']
@@ -25,6 +26,22 @@ def annealer(f):
     @functools.wraps(f)
     def _inner(start, end): return _Annealer(f, start, end)
     return _inner
+
+# %% ../../nbs/14_callback.schedule.ipynb 11
+#TODO Jeremy, make this pickle
+#@annealer
+#def SchedLin(start, end, pos): return start + pos*(end-start)
+#@annealer
+#def SchedCos(start, end, pos): return start + (1 + math.cos(math.pi*(1-pos))) * (end-start) / 2
+#@annealer
+#def SchedNo (start, end, pos): return start
+#@annealer
+#def SchedExp(start, end, pos): return start * (end/start) ** pos
+#
+#SchedLin.__doc__ = "Linear schedule function from `start` to `end`"
+#SchedCos.__doc__ = "Cosine schedule function from `start` to `end`"
+#SchedNo .__doc__ = "Constant schedule function with `start` value"
+#SchedExp.__doc__ = "Exponential schedule function from `start` to `end`"
 
 # %% ../../nbs/14_callback.schedule.ipynb 12
 def sched_lin(start, end, pos): return start + pos*(end-start)
@@ -91,7 +108,33 @@ class ParamScheduler(Callback):
              "after_batch": "Record hyper-parameters of this batch",
              "after_fit": "Save the hyper-parameters in the recorder if there is one"}
 
-# %% ../../nbs/14_callback.schedule.ipynb 46
+# %% ../../nbs/14_callback.schedule.ipynb 47
+class LRWarmup(Callback):
+    "Linearly or exponentially warm up the learning rate over `warmup_steps` training iterations"
+    order = ParamScheduler.order + 1  # run after ParamScheduler so we override its lr
+    run_valid = False
+
+    def __init__(self, warmup_steps:int=100, warmup_type:str='linear'):
+        "Initialize with `warmup_steps` and `warmup_type` ('linear' or 'exp')"
+        assert warmup_type in ('linear', 'exp'), f"warmup_type must be 'linear' or 'exp', got '{warmup_type}'"
+        store_attr('warmup_steps,warmup_type')
+
+    def before_fit(self):
+        "Store the target learning rates from the optimizer"
+        self.target_lrs = [h['lr'] for h in self.opt.hypers]
+
+    def before_batch(self):
+        "Scale the learning rate during warmup period"
+        if not self.training or self.train_iter >= self.warmup_steps: return
+        pct = self.train_iter / self.warmup_steps
+        if self.warmup_type == 'linear':
+            mult = pct
+        else:  # 'exp'
+            mult = (math.exp(pct) - 1) / (math.e - 1)
+        for hp, target_lr in zip(self.opt.hypers, self.target_lrs):
+            hp['lr'] = target_lr * mult
+
+# %% ../../nbs/14_callback.schedule.ipynb 49
 @patch
 def fit_one_cycle(self:Learner, n_epoch, lr_max=None, div=25., div_final=1e5, pct_start=0.25, wd=None,
                   moms=None, cbs=None, reset_opt=False, start_epoch=0):
@@ -103,7 +146,7 @@ def fit_one_cycle(self:Learner, n_epoch, lr_max=None, div=25., div_final=1e5, pc
               'mom': combined_cos(pct_start, *(self.moms if moms is None else moms))}
     self.fit(n_epoch, cbs=ParamScheduler(scheds)+L(cbs), reset_opt=reset_opt, wd=wd, start_epoch=start_epoch)
 
-# %% ../../nbs/14_callback.schedule.ipynb 50
+# %% ../../nbs/14_callback.schedule.ipynb 53
 @patch
 def plot_sched(self:Recorder, keys=None, figsize=None):
     keys = self.hps.keys() if keys is None else L(keys)
@@ -115,7 +158,7 @@ def plot_sched(self:Recorder, keys=None, figsize=None):
         ax.plot(self.hps[p])
         ax.set_ylabel(p)
 
-# %% ../../nbs/14_callback.schedule.ipynb 54
+# %% ../../nbs/14_callback.schedule.ipynb 57
 @patch
 def fit_flat_cos(self:Learner, n_epoch, lr=None, div_final=1e5, pct_start=0.75, wd=None,
                  cbs=None, reset_opt=False, start_epoch=0):
@@ -126,7 +169,7 @@ def fit_flat_cos(self:Learner, n_epoch, lr=None, div_final=1e5, pct_start=0.75, 
     scheds = {'lr': combined_cos(pct_start, lr, lr, lr/div_final)}
     self.fit(n_epoch, cbs=ParamScheduler(scheds)+L(cbs), reset_opt=reset_opt, wd=wd, start_epoch=0)
 
-# %% ../../nbs/14_callback.schedule.ipynb 57
+# %% ../../nbs/14_callback.schedule.ipynb 60
 @patch
 def fit_sgdr(self:Learner, n_cycles, cycle_len, lr_max=None, cycle_mult=2, cbs=None, reset_opt=False, wd=None,
              start_epoch=0):
@@ -134,13 +177,13 @@ def fit_sgdr(self:Learner, n_cycles, cycle_len, lr_max=None, cycle_mult=2, cbs=N
     if self.opt is None: self.create_opt()
     self.opt.set_hyper('lr', self.lr if lr_max is None else lr_max)
     lr_max = np.array([h['lr'] for h in self.opt.hypers])
-    n_epoch = cycle_len * n_cycles if cycle_mult == 1 else cycle_len * (cycle_mult**n_cycles-1)//(cycle_mult-1)
+    n_epoch = cycle_len * (cycle_mult**n_cycles-1)//(cycle_mult-1)
     pcts = [cycle_len * cycle_mult**i / n_epoch for i in range(n_cycles)]
     scheds = [SchedCos(lr_max, 0) for _ in range(n_cycles)]
     scheds = {'lr': combine_scheds(pcts, scheds)}
     self.fit(n_epoch, cbs=ParamScheduler(scheds)+L(cbs), reset_opt=reset_opt, wd=wd, start_epoch=start_epoch)
 
-# %% ../../nbs/14_callback.schedule.ipynb 60
+# %% ../../nbs/14_callback.schedule.ipynb 63
 @patch
 @delegates(Learner.fit_one_cycle)
 def fine_tune(self:Learner, epochs, base_lr=2e-3, freeze_epochs=1, lr_mult=100,
@@ -152,7 +195,7 @@ def fine_tune(self:Learner, epochs, base_lr=2e-3, freeze_epochs=1, lr_mult=100,
     self.unfreeze()
     self.fit_one_cycle(epochs, slice(base_lr/lr_mult, base_lr), pct_start=pct_start, div=div, **kwargs)
 
-# %% ../../nbs/14_callback.schedule.ipynb 67
+# %% ../../nbs/14_callback.schedule.ipynb 70
 @docs
 class LRFinder(ParamScheduler):
     "Training with exponentially growing learning rate"
@@ -194,7 +237,7 @@ class LRFinder(ParamScheduler):
              "after_fit": "Save the hyper-parameters in the recorder if there is one and load the original model",
              "before_validate": "Skip the validation part of training"}
 
-# %% ../../nbs/14_callback.schedule.ipynb 78
+# %% ../../nbs/14_callback.schedule.ipynb 81
 def valley(lrs:list, losses:list, num_it:int):
     "Suggests a learning rate from the longest valley and returns its index"
     n = len(losses)
@@ -215,7 +258,7 @@ def valley(lrs:list, losses:list, num_it:int):
 
     return float(lrs[idx]), (float(lrs[idx]), losses[idx])
 
-# %% ../../nbs/14_callback.schedule.ipynb 81
+# %% ../../nbs/14_callback.schedule.ipynb 84
 def slide(lrs:list, losses:list, num_it:int, lr_diff:int=15, thresh:float=.005, adjust_value:float=1.):
     "Suggests a learning rate following an interval slide rule and returns its index"
     losses = to_np(losses)
@@ -233,14 +276,14 @@ def slide(lrs:list, losses:list, num_it:int, lr_diff:int=15, thresh:float=.005, 
     idx = np.interp(np.log10(suggestion), np.log10(lrs), losses)
     return suggestion, (suggestion, idx)
 
-# %% ../../nbs/14_callback.schedule.ipynb 84
+# %% ../../nbs/14_callback.schedule.ipynb 87
 def minimum(lrs:list, losses:list, num_it:int):
     "Suggests a learning rate one-tenth the minumum before divergance and returns its index"
     lr_min = lrs[losses.argmin()].item()
     loss_idx = losses[min(range(len(lrs)), key=lambda i: abs(lrs[i]-lr_min))]
     return lr_min/10, (lr_min, loss_idx)
 
-# %% ../../nbs/14_callback.schedule.ipynb 86
+# %% ../../nbs/14_callback.schedule.ipynb 89
 def steep(lrs:list, losses:list, num_it:int) -> (float, tuple):
     "Suggests a learning rate when the slope is the steepest and returns its index"
     grads = (losses[1:]-losses[:-1]) / (lrs[1:].log()-lrs[:-1].log())
@@ -248,7 +291,7 @@ def steep(lrs:list, losses:list, num_it:int) -> (float, tuple):
     loss_idx = losses[min(range(len(lrs)), key=lambda i: abs(lrs[i]-lr_steep))]
     return lr_steep, (lr_steep, loss_idx)
 
-# %% ../../nbs/14_callback.schedule.ipynb 88
+# %% ../../nbs/14_callback.schedule.ipynb 91
 @patch
 def plot_lr_find(self:Recorder, skip_end=5, return_fig=True, suggestions=None, nms=None, **kwargs):
     "Plot the result of an LR Finder test (won't work if you didn't do `learn.lr_find()` before)"
@@ -265,11 +308,11 @@ def plot_lr_find(self:Recorder, skip_end=5, return_fig=True, suggestions=None, n
             ax.plot(val, idx, 'o', label=nm, c=color)
         ax.legend(loc='best')
 
-# %% ../../nbs/14_callback.schedule.ipynb 89
+# %% ../../nbs/14_callback.schedule.ipynb 92
 mk_class("SuggestionMethod", **{o.__name__.capitalize():o for o in [valley,slide,minimum,steep]},
          doc="All possible suggestion methods as convience attributes to get tab-completion and typo-proofing")
 
-# %% ../../nbs/14_callback.schedule.ipynb 90
+# %% ../../nbs/14_callback.schedule.ipynb 93
 @patch
 def lr_find(self:Learner, start_lr=1e-7, end_lr=10, num_it=100, stop_div=True, show_plot=True, suggest_funcs=(SuggestionMethod.Valley)):
     "Launch a mock training to find a good learning rate and return suggestions based on `suggest_funcs` as a named tuple"
