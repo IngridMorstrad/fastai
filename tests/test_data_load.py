@@ -156,6 +156,14 @@ class TestFaConvert:
         assert isinstance(result, tuple)
         assert len(result) == 2
 
+    def test_convert_mapping(self):
+        """Converting a mapping should convert each value."""
+        d = {'a': np.array([1.0]), 'b': np.array([2.0])}
+        result = fa_convert(d)
+        assert isinstance(result, dict)
+        assert isinstance(result['a'], Tensor)
+        assert isinstance(result['b'], Tensor)
+
 
 # ============================================================
 # Tests for SkipItemException
@@ -172,6 +180,11 @@ class TestSkipItemException:
         """SkipItemException can be raised and caught."""
         with pytest.raises(SkipItemException):
             raise SkipItemException()
+
+    def test_instance_check(self):
+        """An instance of SkipItemException should be an Exception."""
+        exc = SkipItemException()
+        assert isinstance(exc, Exception)
 
 
 # ============================================================
@@ -485,6 +498,13 @@ class TestDataLoaderShuffleFn:
 class TestDataLoaderDoItem:
     """Tests for DataLoader.do_item with item skipping."""
 
+    def test_do_item_returns_item(self):
+        """do_item should return the dataset item for the given index."""
+        dataset = [10, 20, 30]
+        dl = DataLoader(dataset, bs=2, num_workers=0)
+        result = dl.do_item(0)
+        assert result == 10
+
     def test_skip_item_exception_skips(self):
         """Items raising SkipItemException are skipped (return None)."""
         dataset = list(range(10))
@@ -519,6 +539,39 @@ class TestDataLoaderRandomize:
         dl.randomize()
         state2 = dl.rng.getstate()
         assert state1 != state2
+
+
+# ============================================================
+# Tests for DataLoader.create_item
+# ============================================================
+
+class TestDataLoaderCreateItem:
+    """Tests for DataLoader.create_item method."""
+
+    def test_create_item_indexed(self):
+        """With indexed dataset, create_item should return dataset[s]."""
+        ds = [10, 20, 30, 40, 50]
+        dl = DataLoader(ds, bs=2, num_workers=0)
+        assert dl.create_item(0) == 10
+        assert dl.create_item(2) == 30
+        assert dl.create_item(4) == 50
+
+    def test_create_item_non_indexed(self):
+        """With non-indexed dataset, create_item(None) should use the iterator."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False, num_workers=0)
+        dl.it = iter([10, 20, 30])
+        assert dl.create_item(None) == 10
+        assert dl.create_item(None) == 20
+        assert dl.create_item(None) == 30
+
+    def test_create_item_non_indexed_raises_on_numeric_index(self):
+        """Non-indexed dataset should raise IndexError when given a numeric index."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False, num_workers=0)
+        dl.it = iter([10, 20, 30])
+        with pytest.raises(IndexError, match="Cannot index an iterable dataset"):
+            dl.create_item(0)
 
 
 # ============================================================
@@ -595,6 +648,22 @@ class TestCollateError:
             except RuntimeError:
                 collate_error(e, batch)
         assert "Mismatch found" in str(exc_info.value)
+
+    def test_error_message_contains_shapes(self):
+        """The error message should include both shapes that differ."""
+        batch = [
+            (torch.zeros(3, 4),),
+            (torch.zeros(3, 5),),
+        ]
+        e = RuntimeError("collate failed")
+        with pytest.raises(RuntimeError) as exc_info:
+            try:
+                raise e
+            except RuntimeError:
+                collate_error(e, batch)
+        error_msg = str(exc_info.value)
+        assert 'torch.Size([3, 4])' in error_msg
+        assert 'torch.Size([3, 5])' in error_msg
 
     def test_collate_error_no_mismatch_no_raise(self):
         """collate_error with matching shapes does not raise."""
