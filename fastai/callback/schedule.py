@@ -183,6 +183,7 @@ class LRFinder(ParamScheduler):
 
     def after_fit(self):
         self.learn.opt.zero_grad() # Needed before detaching the optimizer for future fits
+        if not hasattr(self, 'tmp_p'): return
         tmp_f = self.path/self.model_dir/self.tmp_p/'_tmp.pth'
         if tmp_f.exists():
             self.learn.load(f'{self.tmp_p}/_tmp', with_opt=True)
