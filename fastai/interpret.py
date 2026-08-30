@@ -11,7 +11,7 @@ from .tabular.core import *
 import sklearn.metrics as skm
 
 # %% auto 0
-__all__ = ['plot_top_losses', 'Interpretation', 'ClassificationInterpretation', 'SegmentationInterpretation']
+__all__ = ['plot_top_losses', 'Interpretation', 'ClassificationInterpretation']
 
 # %% ../nbs/20_interpret.ipynb 7
 @typedispatch
@@ -167,8 +167,3 @@ class ClassificationInterpretation(Interpretation):
         d,t = flatten_check(decoded, targs)
         names = [str(v) for v in self.vocab]
         print(skm.classification_report(t, d, labels=list(self.vocab.o2i.values()), target_names=names))
-
-# %% ../nbs/20_interpret.ipynb 27
-class SegmentationInterpretation(Interpretation):
-    "Interpretation methods for segmentation models."
-    pass

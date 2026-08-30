@@ -9,7 +9,7 @@ from .optimizer import *
 from .learner import *
 
 # %% auto 0
-__all__ = ['rmse', 'exp_rmspe', 'perplexity', 'AccumMetric', 'skm_to_fastai', 'optim_metric', 'accuracy', 'error_rate',
+__all__ = ['rmse', 'exp_rmspe', 'perplexity', 'AccumMetric', 'skm_to_fastai', 'accuracy', 'error_rate',
            'top_k_accuracy', 'APScoreBinary', 'BalancedAccuracy', 'BrierScore', 'CohenKappa', 'F1Score', 'FBeta',
            'HammingLoss', 'Jaccard', 'Precision', 'Recall', 'RocAuc', 'RocAucBinary', 'MatthewsCorrCoef',
            'accuracy_multi', 'APScoreMulti', 'BrierScoreMulti', 'F1ScoreMulti', 'FBetaMulti', 'HammingLossMulti',
@@ -86,21 +86,6 @@ def skm_to_fastai(func, is_class=True, thresh=None, axis=-1, activation=None, **
         activation = ActivationType.Sigmoid if (is_class and thresh is not None) else ActivationType.No
     return AccumMetric(func, dim_argmax=dim_argmax, activation=activation, thresh=thresh,
                        to_np=True, invert_arg=True, **kwargs)
-
-# %% ../nbs/13b_metrics.ipynb 22
-def optim_metric(f, argname, bounds, tol=0.01, do_neg=True, get_x=False):
-    "Replace metric `f` with a version that optimizes argument `argname`"
-    def _f(preds, targs):
-        def minfunc(x):
-            kwargs = {argname:x}
-            res = f(preds, targs, **kwargs)
-            return -res if do_neg else res
-        optres = scipy.optimize.minimize_scalar(minfunc, bounds=bounds, method='bounded',
-                                                options={'xatol':0.01})
-        fun = -optres.fun if do_neg else optres.fun
-        return (fun,optres.x) if get_x else fun
-    _f.__name__ = f'opt_{f.__name__}'
-    return _f
 
 # %% ../nbs/13b_metrics.ipynb 26
 def accuracy(inp, targ, axis=-1):

@@ -18,7 +18,7 @@ __all__ = ['norm_types', 'setup_cuda', 'subplots', 'show_image', 'show_titled_im
            'TitledTuple', 'get_empty_df', 'display_df', 'get_first', 'one_param', 'item_find', 'find_device', 'find_bs',
            'np_func', 'Module', 'get_model', 'one_hot', 'one_hot_decode', 'params', 'trainable_params',
            'norm_bias_params', 'batch_to_samples', 'logit', 'num_distrib', 'rank_distrib', 'distrib_barrier',
-           'base_doc', 'doc', 'nested_reorder', 'flatten_check', 'make_cross_image', 'show_image_batch',
+           'base_doc', 'doc', 'nested_reorder', 'flatten_check', 'make_cross_image',
            'requires_grad', 'init_default', 'cond_init', 'apply_leaf', 'apply_init', 'script_use_ctx',
            'script_save_ctx', 'script_fwd', 'script_bwd', 'grad_module', 'ismin_torch', 'notmax_torch', 'progress_bar',
            'master_bar']
@@ -211,10 +211,6 @@ def unsqueeze_(x, dim=-1, n=1):
     "Same as `torch.unsqueeze_` but can add `n` dims"
     for _ in range(n): x.unsqueeze_(dim)
     return x
-
-# %% ../nbs/00_torch_core.ipynb 63
-def _fa_rebuild_tensor (cls, *args, **kwargs): return cls(torch._utils._rebuild_tensor_v2(*args, **kwargs))
-def _fa_rebuild_qtensor(cls, *args, **kwargs): return cls(torch._utils._rebuild_qtensor  (*args, **kwargs))
 
 # %% ../nbs/00_torch_core.ipynb 64
 def apply(func, x, *args, **kwargs):
@@ -547,28 +543,16 @@ class ShowTitle:
         return show_title(str(self), ctx=ctx, **merge(self._show_args, kwargs))
 
 class TitledInt(Int, ShowTitle):
-    _show_args = {'label': 'text'}
-    def show(self, ctx=None, **kwargs):
-        "Show self"
-        return show_title(str(self), ctx=ctx, **merge(self._show_args, kwargs))
+    pass
 
 class TitledFloat(Float, ShowTitle):
-    _show_args = {'label': 'text'}
-    def show(self, ctx=None, **kwargs):
-        "Show self"
-        return show_title(str(self), ctx=ctx, **merge(self._show_args, kwargs))
+    pass
 
 class TitledStr(Str, ShowTitle):
-    _show_args = {'label': 'text'}
-    def show(self, ctx=None, **kwargs):
-        "Show self"
-        return show_title(str(self), ctx=ctx, **merge(self._show_args, kwargs))
+    pass
 
 class TitledTuple(fastuple, ShowTitle):
-    _show_args = {'label': 'text'}
-    def show(self, ctx=None, **kwargs):
-        "Show self"
-        return show_title(str(self), ctx=ctx, **merge(self._show_args, kwargs))
+    pass
 
 add_docs(TitledInt, "An `int` with `show`"); add_docs(TitledStr, "An `str` with `show`");
 add_docs(TitledFloat, "A `float` with `show`"); add_docs(TitledTuple, "A `fastuple` with `show`")
@@ -799,15 +783,6 @@ def make_cross_image(bw=True):
         im[0,2,:] = 1.
         im[1,:,2] = 1.
     return im
-
-# %% ../nbs/00_torch_core.ipynb 206
-def show_image_batch(b, show=show_titled_image, items=9, cols=3, figsize=None, **kwargs):
-    "Display batch `b` in a grid of size `items` with `cols` width"
-    if items<cols: cols=items
-    rows = (items+cols-1) // cols
-    if figsize is None: figsize = (cols*3, rows*3)
-    fig,axs = plt.subplots(rows, cols, figsize=figsize)
-    for *o,ax in zip(*to_cpu(b), axs.flatten()): show(o, ax=ax, **kwargs)
 
 # %% ../nbs/00_torch_core.ipynb 209
 def requires_grad(m):
