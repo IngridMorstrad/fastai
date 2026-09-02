@@ -53,6 +53,11 @@ class TestStochasticWeightAveraging:
         cb = StochasticWeightAveraging()
         assert cb.order == 65
 
+    def test_run_valid_is_false(self):
+        """run_valid=False prevents inner-loop events from firing during validation."""
+        cb = StochasticWeightAveraging()
+        assert cb.run_valid is False
+
     def test_in_all(self):
         from fastai.callback.swa import __all__ as exports
         assert 'StochasticWeightAveraging' in exports
@@ -176,7 +181,7 @@ class TestStochasticWeightAveraging:
         assert any_changed, "EMA did not update at swa_start_epoch"
 
     # ------------------------------------------------------------------
-    # Weight swapping during validation
+    # Weight swapping during validation (in-place swap)
     # ------------------------------------------------------------------
 
     def test_before_validate_swaps_to_ema(self):
@@ -223,6 +228,88 @@ class TestStochasticWeightAveraging:
             assert torch.allclose(val, training_snapshot[key], atol=1e-7), \
                 f"Training weights not restored after after_validate for {key}"
 
+    def test_swap_is_self_inverse(self):
+        """Calling _swap_params twice restores original model and EMA state."""
+        model = _make_model()
+        cb, _ = _make_cb(decay=0.8, swa_start_epoch=0, model=model)
+        cb.before_fit()
+
+        with torch.no_grad():
+            for p in model.parameters():
+                p.add_(torch.ones_like(p) * 5.0)
+        cb.epoch = 0
+        cb.training = True
+        cb.after_batch()
+
+        model_before = copy.deepcopy(model.state_dict())
+        ema_before = {k: v.clone() for k, v in cb._ema_state.items()}
+
+        cb._swap_params()
+        cb._swap_params()
+
+        for key in model_before:
+            assert torch.allclose(model.state_dict()[key], model_before[key], atol=1e-7)
+            assert torch.allclose(cb._ema_state[key], ema_before[key], atol=1e-7)
+
+    # ------------------------------------------------------------------
+    # Validate without fit (None guard)
+    # ------------------------------------------------------------------
+
+    def test_validate_without_fit_is_noop(self):
+        """before_validate/after_validate must be safe when _ema_state is None."""
+        model = _make_model()
+        cb = StochasticWeightAveraging(decay=0.9)
+        cb.learn = _MockLearn(model)
+
+        original = copy.deepcopy(model.state_dict())
+
+        # Must not raise
+        cb.before_validate()
+        cb.after_validate()
+
+        for key, val in model.state_dict().items():
+            assert torch.equal(val, original[key]), \
+                "Model weights should be unchanged when validate is called without fit"
+
+    # ------------------------------------------------------------------
+    # after_cancel_validate (exception safety)
+    # ------------------------------------------------------------------
+
+    def test_after_cancel_validate_restores_training_weights(self):
+        """If validation is cancelled, training weights must be restored."""
+        model = _make_model()
+        cb, _ = _make_cb(decay=0.9, swa_start_epoch=0, model=model)
+        cb.before_fit()
+
+        with torch.no_grad():
+            for p in model.parameters():
+                p.add_(torch.ones_like(p) * 7.0)
+        cb.epoch = 0
+        cb.training = True
+        cb.after_batch()
+
+        training_snapshot = copy.deepcopy(model.state_dict())
+
+        # Simulate: before_validate swaps, then an exception cancels validation
+        cb.before_validate()
+        # Model now has EMA weights; training weights are in _ema_state
+
+        # after_cancel_validate should restore training weights
+        cb.after_cancel_validate()
+
+        for key, val in model.state_dict().items():
+            assert torch.allclose(val, training_snapshot[key], atol=1e-7), \
+                f"Training weights not restored after after_cancel_validate for {key}"
+
+    def test_after_cancel_validate_without_fit_is_noop(self):
+        """after_cancel_validate must be safe when _ema_state is None."""
+        model = _make_model()
+        cb = StochasticWeightAveraging(decay=0.9)
+        cb.learn = _MockLearn(model)
+
+        # Must not raise
+        cb.after_cancel_validate()
+
     # ------------------------------------------------------------------
     # after_fit behaviour
     # ------------------------------------------------------------------
@@ -242,7 +329,7 @@ class TestStochasticWeightAveraging:
 
         ema_snapshot = {k: v.clone() for k, v in cb._ema_state.items()}
 
-        # Restore training weights first (simulates normal after_validate)
+        # Simulate normal validation round-trip (swap in, swap out)
         cb.before_validate()
         cb.after_validate()
 
@@ -251,6 +338,20 @@ class TestStochasticWeightAveraging:
         for key, val in model.state_dict().items():
             assert torch.allclose(val, ema_snapshot[key], atol=1e-7), \
                 f"after_fit did not load EMA weights permanently for {key}"
+
+    def test_after_fit_without_prior_fit_is_noop(self):
+        """after_fit must be safe when _ema_state is None."""
+        model = _make_model()
+        cb = StochasticWeightAveraging(decay=0.9)
+        cb.learn = _MockLearn(model)
+
+        original = copy.deepcopy(model.state_dict())
+
+        # Must not raise
+        cb.after_fit()
+
+        for key, val in model.state_dict().items():
+            assert torch.equal(val, original[key])
 
     # ------------------------------------------------------------------
     # Edge cases: decay boundaries
