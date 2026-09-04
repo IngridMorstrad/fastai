@@ -16,76 +16,64 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 
 # ============================================================
-# Re-implement the text preprocessing functions directly from
-# fastai/text/core.py to test them without the full import chain.
-# This avoids needing torch, spacy, and other heavy dependencies.
+# Dynamically extract pure-Python text preprocessing functions
+# from fastai/text/core.py so we test the real implementations
+# without pulling in torch/spacy/fastcore.  Same approach as
+# _tracker_test_helpers.py uses for fastai/callback/tracker.py.
 # ============================================================
 
-# Special tokens
-UNK, PAD, BOS, EOS, FLD, TK_REP, TK_WREP, TK_UP, TK_MAJ = "xxunk xxpad xxbos xxeos xxfld xxrep xxwrep xxup xxmaj".split()
+def _extract_text_core_names():
+    """Read fastai/text/core.py, strip internal imports, exec() only the
+    pure-Python top portion (constants + preprocessing functions), and return
+    the resulting namespace dict."""
+    src_path = os.path.join(os.path.dirname(__file__), '..', 'fastai', 'text', 'core.py')
+    with open(os.path.abspath(src_path)) as f:
+        lines = f.read().split('\n')
 
-_re_spec = re.compile(r'([/#\\])')
+    # Only keep lines up through the replace_space function definition.
+    # Everything after that depends on the full fastai import chain
+    # (defaults, Transform, delegates, spacy, etc.).
+    cutoff = None
+    for i, line in enumerate(lines):
+        if 'def replace_space' in line:
+            # Include through the function body (next non-empty, non-comment line
+            # after the def that is at top-level indentation, or end of file).
+            for j in range(i + 1, len(lines)):
+                stripped = lines[j].strip()
+                if stripped and not stripped.startswith('#') and not lines[j].startswith(' '):
+                    cutoff = j
+                    break
+            break
+    if cutoff is None:
+        cutoff = len(lines)
 
-def spec_add_spaces(t):
-    "Add spaces around / and #"
-    return _re_spec.sub(r' \1 ', t)
+    filtered = []
+    for line in lines[:cutoff]:
+        if line.startswith('from ..') or line.startswith('from .'):
+            filtered.append('pass  # skipped internal import')
+        else:
+            filtered.append(line)
 
-_re_space = re.compile(' {2,}')
+    ns = {'re': re, 'html': html, '__builtins__': __builtins__}
+    exec(compile('\n'.join(filtered), src_path, 'exec'), ns)
+    return ns
 
-def rm_useless_spaces(t):
-    "Remove multiple spaces"
-    return _re_space.sub(' ', t)
+_ns = _extract_text_core_names()
 
-_re_rep = re.compile(r'(\S)(\1{2,})')
+# Functions
+spec_add_spaces = _ns['spec_add_spaces']
+rm_useless_spaces = _ns['rm_useless_spaces']
+replace_rep      = _ns['replace_rep']
+replace_wrep     = _ns['replace_wrep']
+fix_html         = _ns['fix_html']
+replace_all_caps = _ns['replace_all_caps']
+replace_maj      = _ns['replace_maj']
+lowercase        = _ns['lowercase']
+replace_space    = _ns['replace_space']
 
-def replace_rep(t):
-    "Replace repetitions at the character level: cccc -- TK_REP 4 c"
-    def _replace_rep(m):
-        c,cc = m.groups()
-        return f' {TK_REP} {len(cc)+1} {c} '
-    return _re_rep.sub(_replace_rep, t)
-
-_re_wrep = re.compile(r'(?:\s|^)(\w+)\s+((?:\1\s+)+)\1(\s|\W|$)')
-
-def replace_wrep(t):
-    "Replace word repetitions: word word word word -- TK_WREP 4 word"
-    def _replace_wrep(m):
-        c,cc,e = m.groups()
-        return f' {TK_WREP} {len(cc.split())+2} {c} {e}'
-    return _re_wrep.sub(_replace_wrep, t)
-
-def fix_html(x):
-    "Various messy things we've seen in documents"
-    x = x.replace('#39;', "'").replace('amp;', '&').replace('#146;', "'").replace('nbsp;', ' ').replace(
-        '#36;', '$').replace('\\n', "\n").replace('quot;', "'").replace('<br />', "\n").replace(
-        '\\"', '"').replace('<unk>',UNK).replace(' @.@ ','.').replace(' @-@ ','-').replace('...',' \u2026')
-    return html.unescape(x)
-
-_re_all_caps = re.compile(r'(\s|^)([A-Z]+[^a-z\s]*)(?=(\s|$))')
-
-def replace_all_caps(t):
-    "Replace tokens in ALL CAPS by their lower version and add `TK_UP` before."
-    def _replace_all_caps(m):
-        tok = f'{TK_UP} ' if len(m.groups()[1]) > 1 else ''
-        return f"{m.groups()[0]}{tok}{m.groups()[1].lower()}"
-    return _re_all_caps.sub(_replace_all_caps, t)
-
-_re_maj = re.compile(r'(\s|^)([A-Z][^A-Z\s]*)(?=(\s|$))')
-
-def replace_maj(t):
-    "Replace tokens in Sentence Case by their lower version and add `TK_MAJ` before."
-    def _replace_maj(m):
-        tok = f'{TK_MAJ} ' if len(m.groups()[1]) > 1 else ''
-        return f"{m.groups()[0]}{tok}{m.groups()[1].lower()}"
-    return _re_maj.sub(_replace_maj, t)
-
-def lowercase(t, add_bos=True, add_eos=False):
-    "Converts `t` to lowercase"
-    return (f'{BOS} ' if add_bos else '') + t.lower().strip() + (f' {EOS}' if add_eos else '')
-
-def replace_space(t):
-    "Replace embedded spaces in a token with unicode line char to allow for split/join"
-    return t.replace(' ', '\u2581')
+# Constants
+UNK, PAD, BOS, EOS, FLD       = _ns['UNK'], _ns['PAD'], _ns['BOS'], _ns['EOS'], _ns['FLD']
+TK_REP, TK_WREP, TK_UP, TK_MAJ = _ns['TK_REP'], _ns['TK_WREP'], _ns['TK_UP'], _ns['TK_MAJ']
 
 
 # ============================================================
