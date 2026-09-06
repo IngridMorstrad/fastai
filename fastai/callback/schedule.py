@@ -5,6 +5,7 @@
 # %% ../../nbs/14_callback.schedule.ipynb 2
 from __future__ import annotations
 from ..basics import *
+from .tracker import SaveModelCallback
 
 # %% auto 0
 __all__ = ['annealer', 'sched_lin', 'sched_cos', 'sched_no', 'sched_exp', 'SchedLin', 'SchedCos', 'SchedNo', 'SchedExp',
@@ -25,6 +26,22 @@ def annealer(f):
     @functools.wraps(f)
     def _inner(start, end): return _Annealer(f, start, end)
     return _inner
+
+# %% ../../nbs/14_callback.schedule.ipynb 11
+#TODO Jeremy, make this pickle
+#@annealer
+#def SchedLin(start, end, pos): return start + pos*(end-start)
+#@annealer
+#def SchedCos(start, end, pos): return start + (1 + math.cos(math.pi*(1-pos))) * (end-start) / 2
+#@annealer
+#def SchedNo (start, end, pos): return start
+#@annealer
+#def SchedExp(start, end, pos): return start * (end/start) ** pos
+#
+#SchedLin.__doc__ = "Linear schedule function from `start` to `end`"
+#SchedCos.__doc__ = "Cosine schedule function from `start` to `end`"
+#SchedNo .__doc__ = "Constant schedule function with `start` value"
+#SchedExp.__doc__ = "Exponential schedule function from `start` to `end`"
 
 # %% ../../nbs/14_callback.schedule.ipynb 12
 def sched_lin(start, end, pos): return start + pos*(end-start)
