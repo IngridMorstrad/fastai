@@ -18,7 +18,7 @@ carrying ``batch_size``, ``n_batches``, ``total_samples``, ``avg_latency_ms``,
 import time
 import tracemalloc
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Sequence, Tuple
 
 import torch
 

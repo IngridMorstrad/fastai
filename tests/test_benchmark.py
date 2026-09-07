@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 # Importing the module patches Learner.benchmark onto the real Learner class.
-from fastai.benchmark import BenchmarkResult, _benchmark_impl, _infer_input_shape, _format_table
+from fastai.benchmark import BenchmarkResult, _benchmark_impl, _format_table
 
 
 # ---------------------------------------------------------------------------
