@@ -49,37 +49,5 @@ warnings.filterwarnings("ignore", message='.*nonzero.*', category=UserWarning)
 warnings.filterwarnings("ignore", message='.*grid_sample.*', category=UserWarning)
 warnings.filterwarnings("ignore", message='.*Distutils.*', category=UserWarning)
 
-def is_iter(o):
-    "Test whether `o` can be used in a `for` loop"
-    #Rank 0 tensors in PyTorch are not really iterable
-    return isinstance(o, (Iterable,Generator)) and getattr(o,'ndim',1)
-
-def all_equal(a,b):
-    "Compares whether `a` and `b` are the same length and have the same contents"
-    if not is_iter(b): return False
-    return all(equals(a_,b_) for a_,b_ in itertools.zip_longest(a,b))
-
-def noop (x=None, *args, **kwargs):
-    "Do nothing"
-    return x
-
-def noops(self, x=None, *args, **kwargs):
-    "Do nothing (method)"
-    return x
-
-def one_is_instance(a, b, t): return isinstance(a,t) or isinstance(b,t)
-
-def equals(a,b):
-    "Compares `a` and `b` for equality; supports sublists, tensors and arrays too"
-    if one_is_instance(a,b,type): return a==b
-    if hasattr(a, '__array_eq__'): return a.__array_eq__(b)
-    if hasattr(b, '__array_eq__'): return b.__array_eq__(a)
-    cmp = (np.array_equal if one_is_instance(a, b, ndarray       ) else
-           operator.eq    if one_is_instance(a, b, (str,dict,set)) else
-           all_equal      if is_iter(a) or is_iter(b) else
-           operator.eq)
-    return cmp(a,b)
-
-
 def pv(text, verbose):
     if verbose: print(text)
