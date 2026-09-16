@@ -67,19 +67,5 @@ def noops(self, x=None, *args, **kwargs):
     "Do nothing (method)"
     return x
 
-def one_is_instance(a, b, t): return isinstance(a,t) or isinstance(b,t)
-
-def equals(a,b):
-    "Compares `a` and `b` for equality; supports sublists, tensors and arrays too"
-    if one_is_instance(a,b,type): return a==b
-    if hasattr(a, '__array_eq__'): return a.__array_eq__(b)
-    if hasattr(b, '__array_eq__'): return b.__array_eq__(a)
-    cmp = (np.array_equal if one_is_instance(a, b, ndarray       ) else
-           operator.eq    if one_is_instance(a, b, (str,dict,set)) else
-           all_equal      if is_iter(a) or is_iter(b) else
-           operator.eq)
-    return cmp(a,b)
-
-
 def pv(text, verbose):
     if verbose: print(text)

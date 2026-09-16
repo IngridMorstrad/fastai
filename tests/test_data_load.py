@@ -19,12 +19,6 @@ if _repo_root not in sys.path:
 import fasttransform
 import fastcore.basics
 
-# Patch retain_types and cast into the fastcore.dispatch module namespace
-# since fastai imports them via `from fastcore.dispatch import *`
-class _FakeDispatch:
-    """Shim module providing retain_types and cast that fastai expects."""
-    pass
-
 # If fastcore.dispatch doesn't properly export these, patch them in
 try:
     from fastcore.dispatch import retain_types, cast
@@ -48,7 +42,6 @@ from torch import Tensor
 
 from fastai.data.load import (
     fa_collate, fa_convert, SkipItemException, collate_error, DataLoader,
-    _FakeLoader,
 )
 
 
