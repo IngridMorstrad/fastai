@@ -1,12 +1,12 @@
 import numpy as np
 
-import io,operator,sys,os,re,mimetypes,csv,itertools,json,shutil,glob,pickle,tarfile,collections
-import hashlib,itertools,types,inspect,functools,random,time,math,bz2,typing,numbers,string
-import multiprocessing,threading,urllib,tempfile,concurrent.futures,matplotlib,warnings,zipfile
+import io,operator,sys,os,re,mimetypes,csv,itertools,json,shutil,glob,pickle,collections
+import hashlib,itertools,types,inspect,functools,random,time,math,bz2,typing,numbers
+import multiprocessing,threading,tempfile,concurrent.futures,matplotlib,warnings
 
 from concurrent.futures import as_completed
 from functools import partial,reduce
-from itertools import starmap,dropwhile,takewhile,zip_longest
+from itertools import starmap
 from copy import copy,deepcopy
 from multiprocessing import Lock,Process,Queue,queues
 from datetime import datetime
@@ -16,9 +16,9 @@ from typing import Union,Optional,TypeVar,Callable,Any
 from types import SimpleNamespace
 from pathlib import Path
 from collections import OrderedDict,defaultdict,Counter,namedtuple
-from enum import Enum,IntEnum
+from enum import Enum
 from textwrap import TextWrapper
-from operator import itemgetter,attrgetter,methodcaller
+from operator import itemgetter,attrgetter
 from urllib.request import urlopen
 from numbers import Number, Real
 
