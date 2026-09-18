@@ -9,7 +9,8 @@ from .progress import *
 from .fp16 import *
 
 # %% auto 0
-__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'set_bn_eval', 'BnFreeze']
+__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'set_bn_eval', 'BnFreeze',
+           'GPUMemoryProfileCallback']
 
 # %% ../../nbs/18a_callback.training.ipynb 6
 class ShortEpochCallback(Callback):
@@ -57,3 +58,50 @@ class BnFreeze(Callback):
     "Freeze moving average statistics in all non-trainable batchnorm layers."
     def before_train(self):
         set_bn_eval(self.model)
+
+# %% ../../nbs/18a_callback.training.ipynb 35
+class GPUMemoryProfileCallback(Callback):
+    "Log peak GPU memory usage per training step to help diagnose OOM issues"
+    order,run_valid = 70,False
+    def __init__(self, log_every:int=1, peak_only:bool=False):
+        "Create callback: `log_every` batches between logs, `peak_only` to log only per-epoch peaks"
+        store_attr()
+
+    def before_fit(self):
+        if not torch.cuda.is_available():
+            warn("GPUMemoryProfileCallback: CUDA not available, disabling.")
+            self.run = False
+            return
+        self.device = self.learn.model.parameters().__next__().device
+        if self.device.type != 'cuda':
+            warn("GPUMemoryProfileCallback: model not on CUDA device, disabling.")
+            self.run = False
+            return
+        self.peak_log = []
+        self._epoch_peak = 0.
+
+    def before_train(self):
+        torch.cuda.reset_peak_memory_stats(self.device)
+        self._epoch_peak = 0.
+
+    def after_batch(self):
+        peak_mb = torch.cuda.max_memory_allocated(self.device) / 1024**2
+        self._epoch_peak = max(self._epoch_peak, peak_mb)
+        if not self.peak_only and (self.iter + 1) % self.log_every == 0:
+            alloc_mb = torch.cuda.memory_allocated(self.device) / 1024**2
+            print(f'[GPU] step {self.iter+1}/{self.n_iter}: alloc={alloc_mb:.1f}MB  peak={peak_mb:.1f}MB')
+        torch.cuda.reset_peak_memory_stats(self.device)
+
+    def after_train(self):
+        self.peak_log.append(self._epoch_peak)
+        print(f'[GPU] epoch {self.epoch}: peak memory = {self._epoch_peak:.1f}MB')
+
+    def after_fit(self):
+        if self.peak_log:
+            print(f'[GPU] training peak across all epochs: {max(self.peak_log):.1f}MB')
+
+    def plot_peaks(self, **kwargs):
+        "Plot per-epoch peak GPU memory usage"
+        plt.plot(range(len(self.peak_log)), self.peak_log, **kwargs)
+        plt.xlabel('Epoch'); plt.ylabel('Peak GPU Memory (MB)')
+        plt.title('Peak GPU Memory per Epoch')
