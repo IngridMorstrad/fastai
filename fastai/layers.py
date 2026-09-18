@@ -10,14 +10,14 @@ from .torch_core import *
 from torch.nn.utils import weight_norm, spectral_norm
 
 # %% auto 0
-__all__ = ['NormType', 'inplace_relu', 'Mish', 'Swish', 'module', 'Identity', 'Lambda', 'PartialLambda', 'Flatten',
-           'ToTensorBase', 'View', 'ResizeBatch', 'Debugger', 'sigmoid_range', 'SigmoidRange', 'AdaptiveConcatPool1d',
+__all__ = ['NormType', 'Mish', 'Swish', 'module', 'Identity', 'Lambda', 'PartialLambda', 'Flatten',
+           'ToTensorBase', 'View', 'ResizeBatch', 'sigmoid_range', 'SigmoidRange', 'AdaptiveConcatPool1d',
            'AdaptiveConcatPool2d', 'PoolType', 'adaptive_pool', 'PoolFlatten', 'BatchNorm', 'InstanceNorm',
            'BatchNorm1dFlat', 'LinBnDrop', 'sigmoid', 'sigmoid_', 'vleaky_relu', 'init_default', 'init_linear',
            'ConvLayer', 'AdaptiveAvgPool', 'MaxPool', 'AvgPool', 'trunc_normal_', 'Embedding', 'SelfAttention',
            'PooledSelfAttention2d', 'SimpleSelfAttention', 'icnr_init', 'PixelShuffle_ICNR', 'sequential',
-           'SequentialEx', 'MergeLayer', 'Cat', 'SimpleCNN', 'ProdLayer', 'SEModule', 'ResBlock', 'SEBlock',
-           'SEResNeXtBlock', 'SeparableBlock', 'TimeDistributed', 'swish', 'SwishJit', 'MishJitAutoFn', 'mish',
+           'SequentialEx', 'MergeLayer', 'Cat', 'ProdLayer', 'SEModule', 'ResBlock', 'SEBlock',
+           'SEResNeXtBlock', 'swish', 'SwishJit', 'MishJitAutoFn', 'mish',
            'MishJit', 'ParameterModule', 'children_and_parameters', 'has_children', 'flatten_model', 'NoneReduce',
            'in_channels']
 
@@ -90,13 +90,6 @@ class ResizeBatch(Module):
     "Reshape `x` to `size`, keeping batch dim the same size"
     def __init__(self, *size): self.size = size
     def forward(self, x): return x.view((x.size(0),) + self.size)
-
-# %% ../nbs/01_layers.ipynb 21
-@module()
-def Debugger(self,x):
-    "A module to debug inside a model."
-    set_trace()
-    return x
 
 # %% ../nbs/01_layers.ipynb 22
 def sigmoid_range(x, low, high):
@@ -433,25 +426,10 @@ class Cat(nn.ModuleList):
         super().__init__(layers)
     def forward(self, x): return torch.cat([l(x) for l in self], dim=self.dim)
 
-# %% ../nbs/01_layers.ipynb 121
-class SimpleCNN(nn.Sequential):
-    "Create a simple CNN with `filters`."
-    def __init__(self, filters, kernel_szs=None, strides=None, bn=True):
-        nl = len(filters)-1
-        kernel_szs = ifnone(kernel_szs, [3]*nl)
-        strides    = ifnone(strides   , [2]*nl)
-        layers = [ConvLayer(filters[i], filters[i+1], kernel_szs[i], stride=strides[i],
-                  norm_type=(NormType.Batch if bn and i<nl-1 else None)) for i in range(nl)]
-        layers.append(PoolFlatten())
-        super().__init__(*layers)
-
 # %% ../nbs/01_layers.ipynb 128
 class ProdLayer(Module):
     "Merge a shortcut with the result of the module by multiplying them."
     def forward(self, x): return x * x.orig
-
-# %% ../nbs/01_layers.ipynb 129
-inplace_relu = partial(nn.ReLU, inplace=True)
 
 # %% ../nbs/01_layers.ipynb 130
 def SEModule(ch, reduction, act_cls=defaults.activation):
@@ -500,52 +478,6 @@ def SEBlock(expansion, ni, nf, groups=1, reduction=16, stride=1, **kwargs):
 def SEResNeXtBlock(expansion, ni, nf, groups=32, reduction=16, stride=1, base_width=4, **kwargs):
     w = math.floor(nf * (base_width / 64)) * groups
     return ResBlock(expansion, ni, nf, stride=stride, groups=groups, reduction=reduction, nh2=w, **kwargs)
-
-# %% ../nbs/01_layers.ipynb 135
-def SeparableBlock(expansion, ni, nf, reduction=16, stride=1, base_width=4, **kwargs):
-    return ResBlock(expansion, ni, nf, stride=stride, reduction=reduction, nh2=nf*2, dw=True, **kwargs)
-
-# %% ../nbs/01_layers.ipynb 138
-def _stack_tups(tuples, stack_dim=1):
-    "Stack tuple of tensors along `stack_dim`"
-    return tuple(torch.stack([t[i] for t in tuples], dim=stack_dim) for i in range_of(tuples[0]))
-
-# %% ../nbs/01_layers.ipynb 139
-class TimeDistributed(Module):
-    "Applies `module` over `tdim` identically for each step, use `low_mem` to compute one at a time." 
-    def __init__(self, module, low_mem=False, tdim=1):
-        store_attr()
-        
-    def forward(self, *tensors, **kwargs):
-        "input x with shape:(bs,seq_len,channels,width,height)"
-        if self.low_mem or self.tdim!=1: 
-            return self.low_mem_forward(*tensors, **kwargs)
-        else:
-            #only support tdim=1
-            inp_shape = tensors[0].shape
-            bs, seq_len = inp_shape[0], inp_shape[1]   
-            out = self.module(*[x.view(bs*seq_len, *x.shape[2:]) for x in tensors], **kwargs)
-        return self.format_output(out, bs, seq_len)
-    
-    def low_mem_forward(self, *tensors, **kwargs):                                           
-        "input x with shape:(bs,seq_len,channels,width,height)"
-        seq_len = tensors[0].shape[self.tdim]
-        args_split = [torch.unbind(x, dim=self.tdim) for x in tensors]
-        out = []
-        for i in range(seq_len):
-            out.append(self.module(*[args[i] for args in args_split]), **kwargs)
-        if isinstance(out[0], tuple):
-            return _stack_tups(out, stack_dim=self.tdim)
-        return torch.stack(out, dim=self.tdim)
-    
-    def format_output(self, out, bs, seq_len):
-        "unstack from batchsize outputs"
-        if isinstance(out, tuple):
-            return tuple(out_i.view(bs, seq_len, *out_i.shape[1:]) for out_i in out)
-        return out.view(bs, seq_len,*out.shape[1:])
-    
-    def __repr__(self):
-        return f'TimeDistributed({self.module})'
 
 # %% ../nbs/01_layers.ipynb 158
 from torch.jit import script
