@@ -318,11 +318,7 @@ _torch_112 = parse('1.12')
 def set_meta(self:Tensor, x, as_copy=False):
     "Set all metadata in `__dict__`"
     if not hasattr(x,'__dict__'): return
-    # XXX: change to `deepcopy` once PyTorch 1.7.1 is out, and check nb 23 segmentation fit works
     self.__dict__ = copy(x.__dict__) if as_copy else x.__dict__
-
-# %% ../nbs/00_torch_core.ipynb 86
-if not hasattr(torch,'as_subclass'): torch.as_subclass = torch.Tensor.as_subclass
 
 # %% ../nbs/00_torch_core.ipynb 87
 @patch
@@ -406,14 +402,6 @@ class TensorBase(Tensor):
     def clone(self, *, memory_format=None):
         cls = type(self)
         return self.as_subclass(Tensor).clone(memory_format=memory_format).as_subclass(cls)
-
-    def new_empty(self, size, *, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False):
-        cls = type(self)
-        if _torch_version < _torch_113 and layout is None:
-            layout = torch.strided
-        if _torch_version < _torch_112:
-            return super().new_empty(size, dtype=dtype, layout=layout, device=device, pin_memory=pin_memory, requires_grad=requires_grad)
-        return self.as_subclass(Tensor).new_empty(size, dtype=dtype, layout=layout, device=device, pin_memory=pin_memory, requires_grad=requires_grad).as_subclass(cls)
 
     def new_empty(self, *size, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False):
         cls = type(self)
@@ -890,14 +878,3 @@ def notmax_torch(max_version):
     return _torch_version < parse(max_version)
 
 # %% ../nbs/00_torch_core.ipynb 229
-# PyTorch 1.13 introduced a Tensor Subclass string formatting bug
-# Workaround from pending PyTorch PR: https://github.com/pytorch/pytorch/pull/82766
-if ismin_torch('1.13') and notmax_torch('1.14'):
-    from torch.overrides import has_torch_function_unary, handle_torch_function
-    @patch
-    def __format__(self:Tensor, format_spec):
-        if has_torch_function_unary(self):
-            return handle_torch_function(Tensor.__format__, (self,), self, format_spec)
-        if self.dim() == 0 and not self.is_meta and issubclass(type(self), Tensor):
-            return self.item().__format__(format_spec)
-        return object.__format__(self, format_spec)
