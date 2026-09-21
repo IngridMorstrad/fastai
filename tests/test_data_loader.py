@@ -3,14 +3,10 @@
 Covers fa_collate, fa_convert, SkipItemException, collate_error,
 and the DataLoader class with various configurations and behaviors.
 """
-import sys
-import os
 import pytest
 import numpy as np
 import torch
 from torch import Tensor
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.data.load import fa_collate, fa_convert, SkipItemException, collate_error, DataLoader
 
