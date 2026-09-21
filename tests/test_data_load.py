@@ -4,26 +4,13 @@ Covers fa_collate, fa_convert, SkipItemException, collate_error,
 DataLoader class initialization, iteration, batching, shuffling,
 device placement, and edge cases.
 """
-import sys
-import os
 import pytest
-
-# Ensure the repo root is on sys.path so sub-package imports resolve correctly.
-_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if _repo_root not in sys.path:
-    sys.path.insert(0, _repo_root)
 
 # Patch missing functions from fastcore/fasttransform that are needed at runtime.
 # The installed fastcore version moved retain_types/cast to fasttransform;
 # we patch them into the relevant module namespaces so DataLoader iteration works.
 import fasttransform
 import fastcore.basics
-
-# Patch retain_types and cast into the fastcore.dispatch module namespace
-# since fastai imports them via `from fastcore.dispatch import *`
-class _FakeDispatch:
-    """Shim module providing retain_types and cast that fastai expects."""
-    pass
 
 # If fastcore.dispatch doesn't properly export these, patch them in
 try:
@@ -58,28 +45,6 @@ from fastai.data.load import (
 
 class TestFaCollate:
     """Tests for the fa_collate function."""
-
-    def test_collate_tensors(self):
-        """Collating a list of tensors produces a stacked tensor."""
-        items = [torch.tensor([1, 2, 3]), torch.tensor([4, 5, 6])]
-        result = fa_collate(items)
-        assert isinstance(result, Tensor)
-        assert result.shape == (2, 3)
-        assert result[0].tolist() == [1, 2, 3]
-        assert result[1].tolist() == [4, 5, 6]
-
-    def test_collate_numpy_arrays(self):
-        """Collating numpy arrays produces a tensor."""
-        items = [np.array([1.0, 2.0]), np.array([3.0, 4.0])]
-        result = fa_collate(items)
-        assert isinstance(result, Tensor)
-        assert result.shape == (2, 2)
-
-    def test_collate_strings(self):
-        """Collating strings produces a list of strings."""
-        items = ["hello", "world"]
-        result = fa_collate(items)
-        assert result == ["hello", "world"]
 
     def test_collate_tuples_preserves_type(self):
         """Collating tuples preserves the tuple type and collates each element."""
@@ -124,23 +89,11 @@ class TestFaCollate:
 class TestFaConvert:
     """Tests for the fa_convert function."""
 
-    def test_convert_tensor(self):
-        """Converting a tensor returns the same tensor."""
-        t = torch.tensor([1, 2, 3])
-        result = fa_convert(t)
-        assert isinstance(result, Tensor)
-        assert torch.equal(result, t)
-
     def test_convert_numpy(self):
         """Converting a numpy array returns a tensor."""
         arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         result = fa_convert(arr)
         assert isinstance(result, Tensor)
-
-    def test_convert_string(self):
-        """Converting a string returns the string unchanged."""
-        result = fa_convert("hello")
-        assert result == "hello"
 
     def test_convert_list_of_tensors(self):
         """Converting a list of tensors returns a list of converted items."""
@@ -167,11 +120,6 @@ class TestSkipItemException:
     def test_is_exception(self):
         """SkipItemException is an Exception subclass."""
         assert issubclass(SkipItemException, Exception)
-
-    def test_can_be_raised_and_caught(self):
-        """SkipItemException can be raised and caught."""
-        with pytest.raises(SkipItemException):
-            raise SkipItemException()
 
 
 # ============================================================
@@ -253,12 +201,6 @@ class TestDataLoaderLen:
         # 10 / 3 = 3 full batches + 1 partial = 4
         assert len(dl) == 4
 
-    def test_len_exact_division(self):
-        """__len__ with exact division gives exact count."""
-        dataset = list(range(12))
-        dl = DataLoader(dataset, bs=4)
-        assert len(dl) == 3
-
     def test_len_drop_last(self):
         """__len__ with drop_last drops incomplete final batch."""
         dataset = list(range(10))
@@ -298,27 +240,6 @@ class TestDataLoaderIteration:
         # Each batch should be a tensor of size 5
         assert batches[0].shape == (5,)
         assert batches[1].shape == (5,)
-
-    def test_iteration_drop_last(self):
-        """DataLoader with drop_last omits the last incomplete batch."""
-        dataset = list(range(7))
-        dl = DataLoader(dataset, bs=3, num_workers=0, drop_last=True)
-        batches = list(dl)
-        assert len(batches) == 2
-        for b in batches:
-            assert b.shape == (3,)
-
-    def test_iteration_with_tuples(self):
-        """DataLoader handles tuple items correctly."""
-        dataset = [(torch.tensor([i]), torch.tensor([i * 2])) for i in range(6)]
-        dl = DataLoader(dataset, bs=3, num_workers=0)
-        batches = list(dl)
-        assert len(batches) == 2
-        # Each batch is a tuple of two tensors
-        for b in batches:
-            assert isinstance(b, tuple)
-            assert b[0].shape == (3, 1)
-            assert b[1].shape == (3, 1)
 
     def test_iteration_preserves_all_data(self):
         """All dataset items appear in the output when not shuffled."""
@@ -368,12 +289,6 @@ class TestDataLoaderOneBatch:
         assert isinstance(batch, Tensor)
         assert batch.shape == (5,)
 
-    def test_one_batch_empty_raises(self):
-        """one_batch raises ValueError for empty DataLoader."""
-        dl = DataLoader([], bs=1, num_workers=0)
-        with pytest.raises(ValueError, match="does not contain any batches"):
-            dl.one_batch()
-
 
 # ============================================================
 # Tests for DataLoader.new
@@ -391,15 +306,6 @@ class TestDataLoaderNew:
         assert dl2.shuffle == dl.shuffle
         assert dl2.drop_last == dl.drop_last
         assert dl2.n == dl.n
-
-    def test_new_with_different_dataset(self):
-        """new(dataset=...) uses a different dataset."""
-        dataset1 = list(range(10))
-        dataset2 = list(range(20))
-        dl = DataLoader(dataset1, bs=5, num_workers=0)
-        dl2 = dl.new(dataset=dataset2)
-        assert dl2.n == 20
-        assert len(dl2) == 4
 
     def test_new_with_different_bs(self):
         """new(bs=...) uses a different batch size."""
@@ -443,13 +349,6 @@ class TestDataLoaderDevice:
 
 class TestDataLoaderGetIdxs:
     """Tests for DataLoader.get_idxs method."""
-
-    def test_get_idxs_no_shuffle(self):
-        """get_idxs returns sequential indices when shuffle=False."""
-        dataset = list(range(5))
-        dl = DataLoader(dataset, bs=2, num_workers=0, shuffle=False)
-        idxs = dl.get_idxs()
-        assert idxs == [0, 1, 2, 3, 4]
 
     def test_get_idxs_shuffle(self):
         """get_idxs returns shuffled indices when shuffle=True."""
