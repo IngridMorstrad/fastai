@@ -320,7 +320,7 @@ eu_langs = ["bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "ga", "h
             "it","lt","lv","mt","nl","pl","pt","ro","sk","sl","sv"] # all European langs
 
 # %% ../../nbs/30_text.core.ipynb 76
-class SentencePieceTokenizer():#TODO: pass the special tokens symbol to sp
+class SentencePieceTokenizer():
     "SentencePiece tokenizer for `lang`"
     def __init__(self, lang='en', special_toks=None, sp_model=None, vocab_sz=None, max_vocab_sz=30000,
                  model_type='unigram', char_coverage=None, cache_dir='tmp'):
@@ -331,6 +331,7 @@ class SentencePieceTokenizer():#TODO: pass the special tokens symbol to sp
         self.vocab_sz,self.max_vocab_sz,self.model_type = vocab_sz,max_vocab_sz,model_type
         self.char_coverage = ifnone(char_coverage, 0.99999 if lang in eu_langs else 0.9998)
         self.special_toks = ifnone(special_toks, defaults.text_spec_tok)
+        self._special_toks_re = re.compile(r'(' + '|'.join(re.escape(t) for t in self.special_toks) + r')')
         if sp_model is None: self.tok = None
         else:
             self.tok = SentencePieceProcessor()
@@ -373,9 +374,21 @@ class SentencePieceTokenizer():#TODO: pass the special tokens symbol to sp
         self.tok.Load(str(sp_model))
         return {'sp_model': sp_model}
 
+    def _encode_with_special_toks(self, text):
+        "Encode `text` preserving special tokens as atomic pieces"
+        parts = self._special_toks_re.split(text)
+        special_set = set(self.special_toks)
+        tokens = []
+        for p in parts:
+            if p in special_set:
+                tokens.append('\u2581' + p)
+            elif p:
+                tokens.extend(self.tok.EncodeAsPieces(p))
+        return tokens
+
     def __call__(self, items):
         if self.tok is None: self.setup(items)
-        for t in items: yield self.tok.EncodeAsPieces(t)
+        for t in items: yield self._encode_with_special_toks(t)
 
 # %% ../../nbs/30_text.core.ipynb 77
 SubwordTokenizer = SentencePieceTokenizer

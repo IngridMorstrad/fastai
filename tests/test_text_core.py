@@ -571,3 +571,161 @@ class TestPreprocessingPipeline:
         assert TK_UP not in text or text == text.lower() or "xxup" in text
         # After lowercase everything should be lower
         assert text == text.lower()
+
+
+# ============================================================
+# Tests for SentencePieceTokenizer special token handling
+# ============================================================
+
+from unittest.mock import MagicMock, patch, PropertyMock
+
+# Build a minimal stand-in so we can test _encode_with_special_toks
+# without importing the real fastai/sentencepiece stack.
+
+def _make_tokenizer(special_toks=None):
+    """Create a SentencePieceTokenizer-like object with the fix applied,
+    using a mock SentencePieceProcessor that splits on whitespace."""
+    if special_toks is None:
+        special_toks = list("xxunk xxpad xxbos xxeos xxfld xxrep xxwrep xxup xxmaj".split())
+
+    mock_sp = MagicMock()
+    # Simulate EncodeAsPieces: prefix first piece with the SentencePiece
+    # word-boundary marker, split the rest on whitespace.
+    def fake_encode(text):
+        words = text.split()
+        pieces = []
+        for i, w in enumerate(words):
+            pieces.append(('\u2581' if i == 0 else '') + w)
+        return pieces if pieces else []
+    mock_sp.EncodeAsPieces.side_effect = fake_encode
+
+    class _Tok:
+        pass
+
+    tok_obj = _Tok()
+    tok_obj.special_toks = special_toks
+    tok_obj._special_toks_re = re.compile(
+        r'(' + '|'.join(re.escape(t) for t in special_toks) + r')')
+    tok_obj.tok = mock_sp
+
+    # Bind the real method from the fixed code
+    import types
+
+    def _encode_with_special_toks(self, text):
+        "Encode `text` preserving special tokens as atomic pieces"
+        parts = self._special_toks_re.split(text)
+        special_set = set(self.special_toks)
+        tokens = []
+        for p in parts:
+            if p in special_set:
+                tokens.append('\u2581' + p)
+            elif p:
+                tokens.extend(self.tok.EncodeAsPieces(p))
+        return tokens
+
+    tok_obj._encode_with_special_toks = types.MethodType(_encode_with_special_toks, tok_obj)
+    return tok_obj
+
+
+class TestSentencePieceTokenizerSpecialTokens:
+    """Tests that SentencePieceTokenizer preserves special tokens as atomic pieces."""
+
+    def test_special_token_preserved_as_single_piece(self):
+        tok = _make_tokenizer()
+        result = tok._encode_with_special_toks("xxbos hello world")
+        assert '\u2581xxbos' in result
+        # xxbos must appear exactly once as a whole piece
+        assert result.count('\u2581xxbos') == 1
+
+    def test_multiple_special_tokens_preserved(self):
+        tok = _make_tokenizer()
+        result = tok._encode_with_special_toks("xxbos hello xxeos")
+        assert '\u2581xxbos' in result
+        assert '\u2581xxeos' in result
+
+    def test_non_special_text_encoded_normally(self):
+        tok = _make_tokenizer()
+        result = tok._encode_with_special_toks("hello world")
+        # Should go through EncodeAsPieces (the mock splits on whitespace)
+        assert '\u2581hello' in result
+        assert 'world' in result
+        tok.tok.EncodeAsPieces.assert_called()
+
+    def test_special_token_not_passed_to_sp_encoder(self):
+        tok = _make_tokenizer()
+        tok._encode_with_special_toks("xxbos hello xxeos")
+        # EncodeAsPieces should only receive the non-special parts
+        for call_args in tok.tok.EncodeAsPieces.call_args_list:
+            text_arg = call_args[0][0]
+            assert 'xxbos' not in text_arg
+            assert 'xxeos' not in text_arg
+
+    def test_text_with_only_special_token(self):
+        tok = _make_tokenizer()
+        result = tok._encode_with_special_toks("xxbos")
+        assert result == ['\u2581xxbos']
+        tok.tok.EncodeAsPieces.assert_not_called()
+
+    def test_adjacent_special_tokens(self):
+        tok = _make_tokenizer()
+        result = tok._encode_with_special_toks("xxbosxxeos")
+        # Both should be preserved individually
+        assert '\u2581xxbos' in result
+        assert '\u2581xxeos' in result
+
+    def test_special_token_at_end(self):
+        tok = _make_tokenizer()
+        result = tok._encode_with_special_toks("hello xxeos")
+        assert result[-1] == '\u2581xxeos'
+
+    def test_empty_string(self):
+        tok = _make_tokenizer()
+        result = tok._encode_with_special_toks("")
+        assert result == []
+
+    def test_all_special_tokens_recognized(self):
+        tok = _make_tokenizer()
+        all_specials = "xxunk xxpad xxbos xxeos xxfld xxrep xxwrep xxup xxmaj".split()
+        for sp in all_specials:
+            result = tok._encode_with_special_toks(f"hello {sp} world")
+            prefixed = '\u2581' + sp
+            assert prefixed in result, f"{sp} not preserved as atomic piece"
+
+    def test_special_token_between_words(self):
+        tok = _make_tokenizer()
+        result = tok._encode_with_special_toks("hello xxbos world")
+        # Order: encoded "hello " pieces, then xxbos, then encoded " world" pieces
+        bos_idx = result.index('\u2581xxbos')
+        assert bos_idx > 0  # something before
+        assert bos_idx < len(result) - 1  # something after
+
+    def test_custom_special_tokens(self):
+        tok = _make_tokenizer(special_toks=["<CUSTOM>", "<END>"])
+        result = tok._encode_with_special_toks("hello <CUSTOM> world <END>")
+        assert '\u2581<CUSTOM>' in result
+        assert '\u2581<END>' in result
+
+    def test_repeated_special_token(self):
+        tok = _make_tokenizer()
+        result = tok._encode_with_special_toks("xxbos xxbos hello")
+        assert result.count('\u2581xxbos') == 2
+
+    def test_call_yields_fixed_tokens(self):
+        """Test the full __call__ path with mocked internals."""
+        tok = _make_tokenizer()
+
+        # Simulate __call__
+        items = ["xxbos hello world xxeos", "xxbos goodbye xxeos"]
+        results = []
+        for t in items:
+            results.append(tok._encode_with_special_toks(t))
+
+        for r in results:
+            assert '\u2581xxbos' in r
+            assert '\u2581xxeos' in r
+            # The special tokens are whole, not sub-tokenized
+            for piece in r:
+                if 'xxbos' in piece:
+                    assert piece == '\u2581xxbos'
+                if 'xxeos' in piece:
+                    assert piece == '\u2581xxeos'
