@@ -61,6 +61,7 @@ class TensorBoardCallback(TensorBoardBaseCallback):
             self.writer.add_graph(self.model, *self.xb)
 
     def after_batch(self):
+        if not self.run: return
         self.writer.add_scalar('train_loss', self.smooth_loss, self.train_iter)
         for i,h in enumerate(self.opt.hypers):
             for k,v in h.items(): self.writer.add_scalar(f'{k}_{i}', v, self.train_iter)
