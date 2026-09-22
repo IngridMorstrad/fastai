@@ -399,9 +399,7 @@ class TensorBase(Tensor):
         return res.as_subclass(cls)
 
     def requires_grad_(self, requires_grad=True):
-        # Workaround https://github.com/pytorch/pytorch/issues/50219
-        self.requires_grad = requires_grad
-        return self
+        return torch.Tensor.requires_grad_(self, requires_grad)
 
     def clone(self, *, memory_format=None):
         cls = type(self)
