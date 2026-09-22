@@ -89,6 +89,7 @@ class ShowGraphCallback(Callback):
         rec = self.learn.recorder
         iters = range_of(rec.losses)
         val_losses = [v[1] for v in rec.values]
+        if not val_losses: return
         x_bounds = (0, (self.n_epoch - len(self.nb_batches)) * self.nb_batches[0] + len(rec.losses))
         y_bounds = (0, max((max(Tensor(rec.losses)), max(Tensor(val_losses)))))
         self.progress.mbar.update_graph([(iters, rec.losses), (self.nb_batches, val_losses)], x_bounds, y_bounds)
