@@ -8,6 +8,7 @@ from ..basics import *
 from .progress import *
 
 from torch.cuda.amp import GradScaler,autocast
+from torch.cuda.amp.grad_scaler import OptState
 
 # %% auto 0
 __all__ = ['AMPMode', 'MixedPrecision', 'get_master', 'to_master_grads', 'to_model_params', 'test_overflow', 'grad_overflow',

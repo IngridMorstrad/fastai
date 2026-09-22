@@ -291,14 +291,14 @@ def unet_learner(dls, arch, normalize=True, n_out=None, pretrained=True, weights
     store_attr('arch,normalize,n_out,pretrained', self=learn, **kwargs)
     return learn
 
-# %% ../../nbs/21_vision.learner.ipynb 62
+# %% ../../nbs/21_vision.learner.ipynb 60
 @typedispatch
 def show_results(x:TensorImage, y, samples, outs, ctxs=None, max_n=10, nrows=None, ncols=None, figsize=None, **kwargs):
     if ctxs is None: ctxs = get_grid(min(len(samples), max_n), nrows=nrows, ncols=ncols, figsize=figsize)
     ctxs = show_results[object](x, y, samples, outs, ctxs=ctxs, max_n=max_n, **kwargs)
     return ctxs
 
-# %% ../../nbs/21_vision.learner.ipynb 63
+# %% ../../nbs/21_vision.learner.ipynb 61
 @typedispatch
 def show_results(x:TensorImage, y:TensorCategory, samples, outs, ctxs=None, max_n=10, nrows=None, ncols=None, figsize=None, **kwargs):
     if ctxs is None: ctxs = get_grid(min(len(samples), max_n), nrows=nrows, ncols=ncols, figsize=figsize)
@@ -308,7 +308,7 @@ def show_results(x:TensorImage, y:TensorCategory, samples, outs, ctxs=None, max_
             for b,r,c,_ in zip(samples.itemgot(1),outs.itemgot(0),ctxs,range(max_n))]
     return ctxs
 
-# %% ../../nbs/21_vision.learner.ipynb 64
+# %% ../../nbs/21_vision.learner.ipynb 62
 @typedispatch
 def show_results(x:TensorImage, y:TensorMask|TensorPoint|TensorBBox, samples, outs, ctxs=None, max_n=6,
                  nrows=None, ncols=1, figsize=None, **kwargs):
@@ -320,7 +320,7 @@ def show_results(x:TensorImage, y:TensorMask|TensorPoint|TensorBBox, samples, ou
         ctxs[1::2] = [b.show(ctx=c, **kwargs) for b,c,_ in zip(o.itemgot(0),ctxs[1::2],range(2*max_n))]
     return ctxs
 
-# %% ../../nbs/21_vision.learner.ipynb 65
+# %% ../../nbs/21_vision.learner.ipynb 63
 @typedispatch
 def show_results(x:TensorImage, y:TensorImage, samples, outs, ctxs=None, max_n=10, figsize=None, **kwargs):
     if ctxs is None: ctxs = get_grid(3*min(len(samples), max_n), ncols=3, figsize=figsize, title='Input/Target/Prediction')
@@ -329,7 +329,7 @@ def show_results(x:TensorImage, y:TensorImage, samples, outs, ctxs=None, max_n=1
     ctxs[2::3] = [b.show(ctx=c, **kwargs) for b,c,_ in zip(outs.itemgot(0),ctxs[2::3],range(max_n))]
     return ctxs
 
-# %% ../../nbs/21_vision.learner.ipynb 66
+# %% ../../nbs/21_vision.learner.ipynb 64
 @typedispatch
 def plot_top_losses(x: TensorImage, y:TensorCategory, samples, outs, raws, losses, nrows=None, ncols=None, figsize=None, **kwargs):
     axs = get_grid(len(samples), nrows=nrows, ncols=ncols, figsize=figsize, title='Prediction/Actual/Loss/Probability')
@@ -337,7 +337,7 @@ def plot_top_losses(x: TensorImage, y:TensorCategory, samples, outs, raws, losse
         s[0].show(ctx=ax, **kwargs)
         ax.set_title(f'{o[0]}/{s[1]} / {l.item():.2f} / {r.max().item():.2f}')
 
-# %% ../../nbs/21_vision.learner.ipynb 67
+# %% ../../nbs/21_vision.learner.ipynb 65
 @typedispatch
 def plot_top_losses(x: TensorImage, y:TensorMultiCategory, samples, outs, raws, losses, nrows=None, ncols=None, figsize=None, **kwargs):
     axs = get_grid(len(samples), nrows=nrows, ncols=ncols, figsize=figsize)
@@ -348,7 +348,7 @@ def plot_top_losses(x: TensorImage, y:TensorMultiCategory, samples, outs, raws, 
         rows = [b.show(ctx=r, label=l, **kwargs) for b,r in zip(outs.itemgot(i),rows)]
     display_df(pd.DataFrame(rows))
 
-# %% ../../nbs/21_vision.learner.ipynb 68
+# %% ../../nbs/21_vision.learner.ipynb 66
 @typedispatch
 def plot_top_losses(x:TensorImage, y:TensorMask, samples, outs, raws, losses, nrows=None, ncols=None, figsize=None, **kwargs):
     axes = get_grid(len(samples)*3, nrows=len(samples), ncols=3, figsize=figsize, flatten=False, title="Input | Target | Prediction")
