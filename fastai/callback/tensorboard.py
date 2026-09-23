@@ -61,11 +61,13 @@ class TensorBoardCallback(TensorBoardBaseCallback):
             self.writer.add_graph(self.model, *self.xb)
 
     def after_batch(self):
+        if not self.run: return
         self.writer.add_scalar('train_loss', self.smooth_loss, self.train_iter)
         for i,h in enumerate(self.opt.hypers):
             for k,v in h.items(): self.writer.add_scalar(f'{k}_{i}', v, self.train_iter)
 
     def after_epoch(self):
+        if not self.run: return
         for n,v in zip(self.recorder.metric_names[2:-1], self.recorder.log[2:-1]):
             self.writer.add_scalar(n, v, self.train_iter)
         if self.log_preds:
