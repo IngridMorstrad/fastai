@@ -156,6 +156,22 @@ class TestFaConvert:
         assert isinstance(result, tuple)
         assert len(result) == 2
 
+    def test_convert_mapping(self):
+        """Converting a mapping should convert each value."""
+        d = {'a': np.array([1.0]), 'b': np.array([2.0])}
+        result = fa_convert(d)
+        assert isinstance(result, dict)
+        assert isinstance(result['a'], Tensor)
+        assert isinstance(result['b'], Tensor)
+
+    def test_convert_sequence(self):
+        """Converting a sequence should convert each element while preserving type."""
+        items = (np.array([1.0]), np.array([2.0]))
+        result = fa_convert(items)
+        assert isinstance(result, tuple)
+        assert isinstance(result[0], Tensor)
+        assert isinstance(result[1], Tensor)
+
 
 # ============================================================
 # Tests for SkipItemException
@@ -172,6 +188,11 @@ class TestSkipItemException:
         """SkipItemException can be raised and caught."""
         with pytest.raises(SkipItemException):
             raise SkipItemException()
+
+    def test_instance_check(self):
+        """An instance of SkipItemException should be an Exception."""
+        exc = SkipItemException()
+        assert isinstance(exc, Exception)
 
 
 # ============================================================
@@ -237,6 +258,30 @@ class TestDataLoaderInit:
                 return idx
         dl = DataLoader(InfDS(), bs=2, n=None)
         assert dl.n is None
+
+    def test_construction_with_shuffle(self):
+        """DataLoader can be constructed with shuffle=True for indexed datasets."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, shuffle=True)
+        assert dl.shuffle is True
+
+    def test_construction_with_drop_last(self):
+        """DataLoader can be constructed with drop_last=True."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=3, drop_last=True)
+        assert dl.drop_last is True
+
+    def test_construction_indexed_auto_detect(self):
+        """DataLoader auto-detects indexed datasets via __getitem__."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        assert dl.indexed is True
+
+    def test_construction_indexed_explicit(self):
+        """DataLoader accepts explicit indexed parameter."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, indexed=False)
+        assert dl.indexed is False
 
 
 # ============================================================
@@ -376,6 +421,39 @@ class TestDataLoaderOneBatch:
 
 
 # ============================================================
+# Tests for DataLoader.create_item
+# ============================================================
+
+class TestDataLoaderCreateItem:
+    """Tests for DataLoader.create_item method."""
+
+    def test_create_item_indexed(self):
+        """With indexed dataset, create_item should return dataset[s]."""
+        ds = [10, 20, 30, 40, 50]
+        dl = DataLoader(ds, bs=2)
+        assert dl.create_item(0) == 10
+        assert dl.create_item(2) == 30
+        assert dl.create_item(4) == 50
+
+    def test_create_item_non_indexed(self):
+        """With non-indexed dataset, create_item(None) should use the iterator."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False)
+        dl.it = iter([10, 20, 30])
+        assert dl.create_item(None) == 10
+        assert dl.create_item(None) == 20
+        assert dl.create_item(None) == 30
+
+    def test_create_item_non_indexed_raises_on_numeric_index(self):
+        """Non-indexed dataset should raise IndexError when given a numeric index."""
+        ds = iter([10, 20, 30])
+        dl = DataLoader(ds, bs=None, indexed=False)
+        dl.it = iter([10, 20, 30])
+        with pytest.raises(IndexError, match="Cannot index an iterable dataset"):
+            dl.create_item(0)
+
+
+# ============================================================
 # Tests for DataLoader.new
 # ============================================================
 
@@ -400,6 +478,15 @@ class TestDataLoaderNew:
         dl2 = dl.new(dataset=dataset2)
         assert dl2.n == 20
         assert len(dl2) == 4
+
+    def test_new_with_overridden_params(self):
+        """new() should allow overriding parameters."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, shuffle=False)
+        dl2 = dl.new(bs=4, shuffle=True)
+        assert dl2.bs == 4
+        assert dl2.shuffle is True
+        assert dl2.dataset is ds
 
     def test_new_with_different_bs(self):
         """new(bs=...) uses a different batch size."""
@@ -436,6 +523,20 @@ class TestDataLoaderDevice:
         dl = DataLoader(dataset, bs=5, num_workers=0, device='cpu')
         assert dl.device == torch.device('cpu')
 
+    def test_device_setter_string(self):
+        """Setting device with string should work."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        dl.device = 'cpu'
+        assert dl.device == torch.device('cpu')
+
+    def test_device_setter_torch_device(self):
+        """Setting device with a torch.device should work."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2)
+        dl.device = torch.device('cpu')
+        assert dl.device == torch.device('cpu')
+
 
 # ============================================================
 # Tests for DataLoader.get_idxs
@@ -460,6 +561,13 @@ class TestDataLoaderGetIdxs:
         # Likely not in order
         assert idxs != list(range(50))
 
+    def test_get_idxs_length_matches_n(self):
+        """get_idxs should return exactly n indices."""
+        ds = list(range(15))
+        dl = DataLoader(ds, bs=4, shuffle=True)
+        idxs = dl.get_idxs()
+        assert len(idxs) == 15
+
 
 # ============================================================
 # Tests for DataLoader.shuffle_fn
@@ -477,6 +585,25 @@ class TestDataLoaderShuffleFn:
         assert sorted(shuffled) == list(range(10))
         assert len(shuffled) == 10
 
+    def test_shuffle_fn_same_length(self):
+        """shuffle_fn should return a permutation of the same length."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=2, shuffle=True)
+        idxs = list(range(10))
+        shuffled = dl.shuffle_fn(idxs)
+        assert len(shuffled) == len(idxs)
+
+    def test_shuffle_fn_produces_different_orders(self):
+        """shuffle_fn should produce different orderings on repeated calls (with randomization)."""
+        ds = list(range(100))
+        dl = DataLoader(ds, bs=2, shuffle=True)
+        idxs = list(range(100))
+        result1 = dl.shuffle_fn(idxs)
+        dl.randomize()
+        result2 = dl.shuffle_fn(idxs)
+        # With 100 elements, probability of same order is essentially 0
+        assert result1 != result2
+
 
 # ============================================================
 # Tests for DataLoader.do_item with SkipItemException
@@ -484,6 +611,13 @@ class TestDataLoaderShuffleFn:
 
 class TestDataLoaderDoItem:
     """Tests for DataLoader.do_item with item skipping."""
+
+    def test_do_item_returns_item(self):
+        """do_item should return the dataset item for the given index."""
+        ds = [10, 20, 30]
+        dl = DataLoader(ds, bs=2)
+        result = dl.do_item(0)
+        assert result == 10
 
     def test_skip_item_exception_skips(self):
         """Items raising SkipItemException are skipped (return None)."""
@@ -547,6 +681,15 @@ class TestDataLoaderChunkify:
         chunks = list(dl.chunkify(items))
         assert chunks == [[1, 2, 3], [4, 5, 6]]
 
+    def test_chunkify_with_drop_last(self):
+        """With drop_last=True, chunkify should drop incomplete final chunk."""
+        ds = list(range(10))
+        dl = DataLoader(ds, bs=3, drop_last=True)
+        chunks = list(dl.chunkify(iter(range(10))))
+        assert len(chunks) == 3  # [0,1,2], [3,4,5], [6,7,8] -- last [9] dropped
+        for chunk in chunks:
+            assert len(list(chunk)) == 3
+
 
 # ============================================================
 # Tests for _FakeLoader
@@ -605,6 +748,22 @@ class TestCollateError:
         e = RuntimeError("original error")
         # Should not raise since there's no mismatch
         collate_error(e, batch)
+
+    def test_error_message_contains_shapes(self):
+        """The error message should include both shapes that differ."""
+        batch = [
+            (torch.zeros(3, 4),),
+            (torch.zeros(3, 5),),
+        ]
+        e = RuntimeError("collate failed")
+        with pytest.raises(RuntimeError) as exc_info:
+            try:
+                raise e
+            except RuntimeError:
+                collate_error(e, batch)
+        error_msg = str(exc_info.value)
+        assert 'torch.Size([3, 4])' in error_msg
+        assert 'torch.Size([3, 5])' in error_msg
 
 
 # ============================================================
