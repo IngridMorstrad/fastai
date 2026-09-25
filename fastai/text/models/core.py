@@ -16,12 +16,6 @@ __all__ = ['LinearDecoder', 'SequentialRNN', 'get_language_model', 'SentenceEnco
 _model_meta = {AWD_LSTM: {'hid_name':'emb_sz', 'url':URLs.WT103_FWD, 'url_bwd':URLs.WT103_BWD,
                           'config_lm':awd_lstm_lm_config, 'split_lm': awd_lstm_lm_split,
                           'config_clas':awd_lstm_clas_config, 'split_clas': awd_lstm_clas_split},}
-              # Transformer: {'hid_name':'d_model', 'url':URLs.OPENAI_TRANSFORMER,
-              #               'config_lm':tfmer_lm_config, 'split_lm': tfmer_lm_split,
-              #               'config_clas':tfmer_clas_config, 'split_clas': tfmer_clas_split},
-              # TransformerXL: {'hid_name':'d_model',
-              #                'config_lm':tfmerXL_lm_config, 'split_lm': tfmerXL_lm_split,
-              #                'config_clas':tfmerXL_clas_config, 'split_clas': tfmerXL_clas_split}}
 
 # %% ../../../nbs/33_text.models.core.ipynb 7
 class LinearDecoder(Module):

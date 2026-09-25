@@ -20,7 +20,7 @@ try:
 except: pass
 
 # %% auto 0
-__all__ = ['dicom_windows', 'get_dicom_files', 'TensorDicom', 'PILDicom', 'array_freqhist_bins', 'TensorCTScan', 'PILCTScan',
+__all__ = ['dicom_windows', 'get_dicom_files', 'TensorDicom', 'PILDicom', 'TensorCTScan', 'PILCTScan',
            'uniform_blur2d', 'gauss_blur2d', 'mask2bbox', 'crop_resize', 'DicomSegmentationDataLoaders', 'DcmDataset',
            'DcmTag', 'DcmMultiValue', 'dcmread']
 
@@ -57,10 +57,6 @@ class PILDicom(PILBase):
 
 PILDicom._tensor_cls = TensorDicom
 
-# %% ../../nbs/60_medical.imaging.ipynb 16
-@patch
-def png16read(self:Path): return array(Image.open(self), dtype=np.uint16)
-
 # %% ../../nbs/60_medical.imaging.ipynb 17
 @patch(as_prop=True)
 def pixels(self:DcmDataset):
@@ -75,16 +71,6 @@ def scaled_px(self:DcmDataset):
     if hasattr(self, 'RescaleSlope') and hasattr(self, 'RescaleIntercept') is not None:
         return img * self.RescaleSlope + self.RescaleIntercept 
     else: return img
-
-# %% ../../nbs/60_medical.imaging.ipynb 25
-def array_freqhist_bins(self, n_bins=100):
-    "A numpy based function to split the range of pixel values into groups, such that each group has around the same number of pixels"
-    imsd = np.sort(self.flatten())
-    t = np.array([0.001])
-    t = np.append(t, np.arange(n_bins)/n_bins+(1/2/n_bins))
-    t = np.append(t, 0.999)
-    t = (len(imsd)*t+0.5).astype(int)
-    return np.unique(imsd[t])
 
 # %% ../../nbs/60_medical.imaging.ipynb 26
 @patch
@@ -286,16 +272,6 @@ def to_nchan(x:Tensor, wins, bins=None):
 @patch
 def to_nchan(x:DcmDataset, wins, bins=None):
     return x.scaled_px.to_nchan(wins, bins)
-
-# %% ../../nbs/60_medical.imaging.ipynb 80
-@patch
-def to_3chan(x:Tensor, win1, win2, bins=None):
-    return x.to_nchan([win1,win2],bins=bins)
-
-# %% ../../nbs/60_medical.imaging.ipynb 81
-@patch
-def to_3chan(x:DcmDataset, win1, win2, bins=None):
-    return x.scaled_px.to_3chan(win1, win2, bins)
 
 # %% ../../nbs/60_medical.imaging.ipynb 83
 @patch
