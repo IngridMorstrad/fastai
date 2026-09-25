@@ -9,12 +9,12 @@ from .core import *
 from .data import *
 
 # %% auto 0
-__all__ = ['TensorTypes', 'RandTransform', 'FlipItem', 'DihedralItem', 'CropPad', 'RandomCrop', 'OldRandomCrop', 'Resize',
+__all__ = ['TensorTypes', 'RandTransform', 'FlipItem', 'DihedralItem', 'CropPad', 'RandomCrop', 'Resize',
            'RandomResizedCrop', 'RatioResize', 'affine_grid', 'AffineCoordTfm', 'RandomResizedCropGPU', 'mask_tensor',
-           'affine_mat', 'flip_mat', 'Flip', 'DeterministicDraw', 'DeterministicFlip', 'dihedral_mat', 'Dihedral',
-           'DeterministicDihedral', 'rotate_mat', 'Rotate', 'zoom_mat', 'Zoom', 'find_coeffs', 'apply_perspective',
+           'affine_mat', 'flip_mat', 'Flip', 'dihedral_mat', 'Dihedral',
+           'rotate_mat', 'Rotate', 'zoom_mat', 'Zoom', 'find_coeffs', 'apply_perspective',
            'Warp', 'SpaceTfm', 'LightingTfm', 'Brightness', 'Contrast', 'grayscale', 'Saturation', 'rgb2hsv', 'hsv2rgb',
-           'HSVTfm', 'Hue', 'cutout_gaussian', 'norm_apply_denorm', 'RandomErasing', 'setup_aug_tfms', 'aug_transforms',
+           'HSVTfm', 'Hue', 'cutout_gaussian', 'RandomErasing', 'setup_aug_tfms', 'aug_transforms',
            'PadMode', 'ResizeMethod']
 
 # %% ../../nbs/09_vision.augment.ipynb 5
@@ -222,14 +222,6 @@ class RandomCrop(RandTransform):
 
     def encodes(self, x:Image.Image|TensorBBox|TensorPoint):
         return x.crop_pad(self.size, self.tl, orig_sz=self.orig_sz)
-
-# %% ../../nbs/09_vision.augment.ipynb 44
-class OldRandomCrop(CropPad):
-    "Randomly crop an image to `size`"
-    def before_call(self, b, split_idx):
-        super().before_call(b, split_idx)
-        w,h = self.orig_sz
-        if not split_idx: self.tl = (random.randint(0,w-self.cp_size[0]), random.randint(0,h-self.cp_size[1]))
 
 # %% ../../nbs/09_vision.augment.ipynb 50
 mk_class('ResizeMethod', **{o:o.lower() for o in ['Squish', 'Crop', 'Pad']},
@@ -596,7 +588,7 @@ def flip_mat(
 
 # %% ../../nbs/09_vision.augment.ipynb 136
 def _get_default(x, mode=None, pad_mode=None):
-    if mode is None: mode='bilinear' if isinstance(x, TensorMask) else 'bilinear'
+    if mode is None: mode='bilinear'
     if pad_mode is None: pad_mode=PadMode.Zeros if isinstance(x, (TensorPoint, TensorBBox)) else PadMode.Reflection
     x0 = x[0] if isinstance(x, tuple) else x
     return x0,mode,pad_mode
@@ -630,26 +622,6 @@ class Flip(AffineCoordTfm):
     ):
         aff_fs = partial(flip_mat, p=p, draw=draw, batch=batch)
         super().__init__(aff_fs, size=size, mode=mode, pad_mode=pad_mode, align_corners=align_corners, p=p)
-
-# %% ../../nbs/09_vision.augment.ipynb 146
-class DeterministicDraw():
-    def __init__(self, vals): self.vals,self.count = vals,-1
-
-    def __call__(self, x):
-        self.count += 1
-        return x.new_zeros(x.size(0)) + self.vals[self.count%len(self.vals)]
-
-# %% ../../nbs/09_vision.augment.ipynb 148
-class DeterministicFlip(Flip):
-    "Flip the batch every other call"
-    def __init__(self, 
-        size:int|tuple=None, # Output size, duplicated if one value is specified
-        mode:str='bilinear', # PyTorch `F.grid_sample` interpolation
-        pad_mode=PadMode.Reflection, # A `PadMode`
-        align_corners=True, # PyTorch `F.grid_sample` align_corners
-        **kwargs
-    ):
-        super().__init__(p=1., draw=DeterministicDraw([0,1]), mode=mode, pad_mode=pad_mode, align_corners=align_corners, **kwargs)
 
 # %% ../../nbs/09_vision.augment.ipynb 153
 def dihedral_mat(
@@ -698,17 +670,6 @@ class Dihedral(AffineCoordTfm):
     ):
         f = partial(dihedral_mat, p=p, draw=draw, batch=batch)
         super().__init__(aff_fs=f, size=size, mode=mode, pad_mode=pad_mode, align_corners=align_corners)
-
-# %% ../../nbs/09_vision.augment.ipynb 160
-class DeterministicDihedral(Dihedral):
-    def __init__(self, 
-        size:int|tuple=None, # Output size, duplicated if one value is specified
-        mode:str='bilinear', # PyTorch `F.grid_sample` interpolation
-        pad_mode=PadMode.Reflection, # A `PadMode`
-        align_corners=None # PyTorch `F.grid_sample` align_corners
-    ):
-        "Flip the batch every other call"
-        super().__init__(p=1., draw=DeterministicDraw(list(range(8))), pad_mode=pad_mode, align_corners=align_corners)
 
 # %% ../../nbs/09_vision.augment.ipynb 164
 def rotate_mat(
@@ -1168,16 +1129,6 @@ def cutout_gaussian(
     chan,img_h,img_w = x.shape[-3:]
     for rl,rh,cl,ch in areas: x[..., rl:rh, cl:ch].normal_()
     return x
-
-# %% ../../nbs/09_vision.augment.ipynb 248
-def norm_apply_denorm(
-    x:Tensor, # Input Image 
-    f:callable, # Function to apply 
-    nrm:callable # Normalization transformation
-):
-    "Normalize `x` with `nrm`, then apply `f`, then denormalize"
-    y = f(nrm(x.clone()))
-    return nrm.decode(y).clamp(0,1)
 
 # %% ../../nbs/09_vision.augment.ipynb 251
 def _slice(area, sz):
