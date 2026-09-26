@@ -435,6 +435,33 @@ def export(self:Learner, fname='export.pkl', pickle_module=pickle, pickle_protoc
     if state is not None: self.opt.load_state_dict(state)
     self.dls = old_dbunch
 
+# %% ../nbs/13a_learner.ipynb 103
+@patch
+@delegates(torch.onnx.export)
+def to_onnx(self:Learner, fname='export.onnx', batch_dim=0, input_names=None, output_names=None, dynamic_axes=None, **kwargs):
+    "Export the model to `fname` in ONNX format with a dynamic batch-size axis on inputs and outputs"
+    if input_names is None: input_names = ['input']
+    if output_names is None: output_names = ['output']
+    if dynamic_axes is None:
+        dynamic_axes = {}
+        for n in input_names:  dynamic_axes[n] = {batch_dim: 'batch'}
+        for n in output_names: dynamic_axes[n] = {batch_dim: 'batch'}
+    xb = self.dls.one_batch()[0][:1]
+    try: xb = xb.to(next(self.model.parameters()).device)
+    except StopIteration: pass  # parameter-less model: keep xb on the `one_batch()` device
+    file = join_path_file(fname, self.path, ext='.onnx')
+    was_training = self.model.training
+    self.model.eval()
+    try:
+        with torch.no_grad(), warnings.catch_warnings():
+            #To avoid the warnings that come from PyTorch during ONNX export
+            warnings.simplefilter("ignore")
+            torch.onnx.export(self.model, xb, str(file), input_names=input_names, output_names=output_names,
+                              dynamic_axes=dynamic_axes, **kwargs)
+    finally:
+        self.model.train(was_training)
+    return file
+
 # %% ../nbs/13a_learner.ipynb 104
 def load_learner(fname, cpu=True, pickle_module=pickle):
     "Load a `Learner` object in `fname`, by default putting it on the `cpu`"
