@@ -32,6 +32,10 @@ from fastai.metrics import (
 )
 
 
+def _make_learn(pred, targ, training=False):
+    return SimpleNamespace(pred=pred, y=targ, training=training)
+
+
 # ============================================================
 # Tests for accuracy
 # ============================================================
@@ -909,9 +913,6 @@ class TestSpearmanCorrCoef:
 class TestDice:
     """Tests for binary Dice coefficient."""
 
-    def _make_learn(self, pred, targ):
-        return SimpleNamespace(pred=pred, y=targ)
-
     def test_perfect_prediction(self):
         dice = Dice(axis=1)
         dice.reset()
@@ -922,7 +923,7 @@ class TestDice:
         pred[0, 0, 2] = 10.0
         pred[0, 0, 3] = 10.0
         targ = torch.tensor([[1, 1, 0, 0]])
-        dice.accumulate(self._make_learn(pred, targ))
+        dice.accumulate(_make_learn(pred, targ))
         assert dice.value == 1.0
 
     def test_no_overlap(self):
@@ -931,7 +932,7 @@ class TestDice:
         pred = torch.zeros(1, 2, 4)
         pred[0, 0, :] = 10.0  # predict all class 0
         targ = torch.tensor([[1, 1, 1, 1]])  # all class 1
-        dice.accumulate(self._make_learn(pred, targ))
+        dice.accumulate(_make_learn(pred, targ))
         # inter=0, union=4, dice=0/4=0
         assert dice.value == 0.0
 
@@ -947,7 +948,7 @@ class TestDice:
         # Predicted 1s: {0, 1}, True 1s: {0, 2}
         # inter = 1 (pos 0), union = pred_1_count + targ_1_count = 2 + 2 = 4
         # dice = 2*1/4 = 0.5
-        dice.accumulate(self._make_learn(pred, targ))
+        dice.accumulate(_make_learn(pred, targ))
         assert abs(dice.value - 0.5) < 1e-5
 
     def test_multi_batch_accumulation(self):
@@ -958,7 +959,7 @@ class TestDice:
         pred1[0, 1, 0] = 10.0
         pred1[0, 1, 1] = 10.0
         targ1 = torch.tensor([[1, 1]])
-        dice.accumulate(self._make_learn(pred1, targ1))
+        dice.accumulate(_make_learn(pred1, targ1))
         # inter=2, union=4
 
         # Batch 2: no overlap
@@ -966,7 +967,7 @@ class TestDice:
         pred2[0, 0, 0] = 10.0
         pred2[0, 0, 1] = 10.0
         targ2 = torch.tensor([[1, 1]])
-        dice.accumulate(self._make_learn(pred2, targ2))
+        dice.accumulate(_make_learn(pred2, targ2))
         # inter=2+0=2, union=4+2=6 (pred 0+0=0 for class 1, targ=2)
         # dice = 2*2/6 = 0.6667
         assert abs(dice.value - 2.0 / 3.0) < 1e-5
@@ -977,7 +978,7 @@ class TestDice:
         pred = torch.zeros(1, 2, 2)
         pred[0, 0, :] = 10.0  # all class 0
         targ = torch.tensor([[0, 0]])  # all class 0
-        dice.accumulate(self._make_learn(pred, targ))
+        dice.accumulate(_make_learn(pred, targ))
         # inter=0, union=0 -> returns None
         assert dice.value is None
 
@@ -989,9 +990,6 @@ class TestDice:
 class TestDiceMulti:
     """Tests for multiclass Dice metric."""
 
-    def _make_learn(self, pred, targ):
-        return SimpleNamespace(pred=pred, y=targ)
-
     def test_perfect_prediction(self):
         dice = DiceMulti(axis=1)
         dice.reset()
@@ -1001,7 +999,7 @@ class TestDiceMulti:
         pred[0, 1, 1] = 10.0
         pred[0, 2, 2] = 10.0
         targ = torch.tensor([[0, 1, 2]])
-        dice.accumulate(self._make_learn(pred, targ))
+        dice.accumulate(_make_learn(pred, targ))
         assert abs(dice.value - 1.0) < 1e-5
 
     def test_all_same_class(self):
@@ -1010,7 +1008,7 @@ class TestDiceMulti:
         pred = torch.zeros(1, 3, 4)
         pred[0, 0, :] = 10.0  # predict all class 0
         targ = torch.tensor([[0, 0, 0, 0]])
-        dice.accumulate(self._make_learn(pred, targ))
+        dice.accumulate(_make_learn(pred, targ))
         # Class 0: dice=1 (perfect), Class 1: 0/0 -> nan, Class 2: 0/0 -> nan
         # nanmean of [1.0, nan, nan] = 1.0
         assert abs(dice.value - 1.0) < 1e-5
@@ -1023,9 +1021,6 @@ class TestDiceMulti:
 class TestJaccardCoeff:
     """Tests for binary Jaccard coefficient (IoU)."""
 
-    def _make_learn(self, pred, targ):
-        return SimpleNamespace(pred=pred, y=targ)
-
     def test_perfect(self):
         jac = JaccardCoeff(axis=1)
         jac.reset()
@@ -1035,7 +1030,7 @@ class TestJaccardCoeff:
         pred[0, 0, 2] = 10.0
         pred[0, 0, 3] = 10.0
         targ = torch.tensor([[1, 1, 0, 0]])
-        jac.accumulate(self._make_learn(pred, targ))
+        jac.accumulate(_make_learn(pred, targ))
         # inter=2, union=4, jaccard = 2/(4-2) = 1.0
         assert jac.value == 1.0
 
@@ -1050,7 +1045,7 @@ class TestJaccardCoeff:
         targ = torch.tensor([[1, 0, 1, 0]])
         # pred 1s: {0,1}, targ 1s: {0,2}
         # inter=1, union=2+2=4, jaccard=1/(4-1)=1/3
-        jac.accumulate(self._make_learn(pred, targ))
+        jac.accumulate(_make_learn(pred, targ))
         assert abs(jac.value - 1.0 / 3.0) < 1e-5
 
     def test_no_positives_returns_none(self):
@@ -1059,7 +1054,7 @@ class TestJaccardCoeff:
         pred = torch.zeros(1, 2, 2)
         pred[0, 0, :] = 10.0
         targ = torch.tensor([[0, 0]])
-        jac.accumulate(self._make_learn(pred, targ))
+        jac.accumulate(_make_learn(pred, targ))
         assert jac.value is None
 
 
@@ -1070,9 +1065,6 @@ class TestJaccardCoeff:
 class TestJaccardCoeffMulti:
     """Tests for multiclass Jaccard coefficient (mIoU)."""
 
-    def _make_learn(self, pred, targ):
-        return SimpleNamespace(pred=pred, y=targ)
-
     def test_perfect(self):
         jac = JaccardCoeffMulti(axis=1)
         jac.reset()
@@ -1081,7 +1073,7 @@ class TestJaccardCoeffMulti:
         pred[0, 1, 1] = 10.0
         pred[0, 2, 2] = 10.0
         targ = torch.tensor([[0, 1, 2]])
-        jac.accumulate(self._make_learn(pred, targ))
+        jac.accumulate(_make_learn(pred, targ))
         assert abs(jac.value - 1.0) < 1e-5
 
 
@@ -1092,9 +1084,6 @@ class TestJaccardCoeffMulti:
 class TestCorpusBLEUMetric:
     """Tests for corpus-level BLEU score."""
 
-    def _make_learn(self, pred, targ, training=False):
-        return SimpleNamespace(pred=pred, y=targ, training=training)
-
     def test_perfect_bleu(self):
         bleu = CorpusBLEUMetric(vocab_sz=100, axis=-1)
         bleu.reset()
@@ -1104,7 +1093,7 @@ class TestCorpusBLEUMetric:
         for i in range(batch_size):
             for j in range(seq_len):
                 pred[i, j, targ[i, j]] = 10.0
-        bleu.accumulate(self._make_learn(pred, targ))
+        bleu.accumulate(_make_learn(pred, targ))
         assert bleu.value == 1.0
 
     def test_random_predictions_low_bleu(self):
@@ -1114,7 +1103,7 @@ class TestCorpusBLEUMetric:
         torch.manual_seed(42)
         targ = torch.randint(0, vocab_sz, (batch_size, seq_len))
         pred = torch.randn(batch_size, seq_len, vocab_sz)
-        bleu.accumulate(self._make_learn(pred, targ))
+        bleu.accumulate(_make_learn(pred, targ))
         # Random predictions should have very low BLEU
         assert bleu.value < 0.2
 
@@ -1123,7 +1112,7 @@ class TestCorpusBLEUMetric:
         bleu.reset()
         targ = torch.randint(0, 100, (2, 10))
         pred = torch.randn(2, 10, 100)
-        bleu.accumulate(self._make_learn(pred, targ, training=True))
+        bleu.accumulate(_make_learn(pred, targ, training=True))
         # When training=True, accumulate returns None and does not update counts
         assert bleu.pred_len == 0
         assert bleu.targ_len == 0
