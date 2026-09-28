@@ -10,7 +10,8 @@ from functools import lru_cache
 import fastai.data
 
 # %% auto 0
-__all__ = ['fastai_cfg', 'fastai_path', 'URLs', 'untar_data']
+__all__ = ['fastai_cfg', 'fastai_path', 'URLs', 'untar_data', 'fastai_lineage_path', 'dataset_hash', 'DatasetSnapshot',
+           'register_snapshot', 'list_snapshots', 'get_snapshot', 'reproduce_snapshot']
 
 # %% ../../nbs/04_data.external.ipynb 24
 @lru_cache(maxsize=None)
@@ -131,8 +132,153 @@ def untar_data(
     data:Path=None, # Optional override for `Config`'s `data` key
     c_key:str='data', # Key in `Config` where to extract file
     force_download:bool=False, # Setting to `True` will overwrite any existing copy of data
+    track_lineage:bool=False, # Record a dataset snapshot (url, path, content hash, timestamp) in the lineage registry for reproducibility
     base:str='~/.fastai' # Directory containing config file and base of relative paths
 ) -> Path: # Path to extracted file(s)
     "Download `url` using `FastDownload.get`"
     d = FastDownload(fastai_cfg(), module=fastai.data, archive=archive, data=data, base=base)
-    return d.get(url, force=force_download, extract_key=c_key)
+    res = d.get(url, force=force_download, extract_key=c_key)
+    if track_lineage: register_snapshot(url, res)
+    return res
+
+# %% ../../nbs/04_data.external.ipynb 39
+import hashlib, json
+from datetime import datetime, timezone
+
+# %% ../../nbs/04_data.external.ipynb 40
+def fastai_lineage_path() -> Path: # Path to the dataset lineage registry JSON file
+    "Path to the dataset lineage registry JSON file"
+    return fastai_cfg().path('storage')/'lineage.json'
+
+# %% ../../nbs/04_data.external.ipynb 41
+def dataset_hash(
+    path:Path, # Extracted dataset directory or file to hash
+    chunk_size:int=1<<20 # Bytes read per chunk to bound memory use
+) -> str: # SHA-256 hex digest over file contents and relative names
+    "Deterministic SHA-256 digest of the data at `path` (stable across runs)"
+    path = Path(path)
+    h = hashlib.sha256()
+    if path.is_dir():
+        files = sorted((f for f in path.rglob('*') if f.is_file()), key=lambda f: f.relative_to(path).as_posix())
+        for f in files:
+            h.update(f.relative_to(path).as_posix().encode('utf-8'))
+            with open(f, 'rb') as fh:
+                for chunk in iter(lambda: fh.read(chunk_size), b''): h.update(chunk)
+    else:
+        with open(path, 'rb') as fh:
+            for chunk in iter(lambda: fh.read(chunk_size), b''): h.update(chunk)
+    return h.hexdigest()
+
+# %% ../../nbs/04_data.external.ipynb 42
+def _snapshot_id(url:str, hash:str) -> str: # Deterministic 12-char id from url+hash
+    "Derive a stable snapshot id from `url` and content `hash`"
+    return hashlib.sha256(f'{url}@{hash}'.encode('utf-8')).hexdigest()[:12]
+
+# %% ../../nbs/04_data.external.ipynb 43
+class DatasetSnapshot:
+    "A record of a dataset's source url, local path, content hash, size and creation time"
+    def __init__(self,
+        url:str, # Source url the dataset was downloaded from
+        path:str, # Local filesystem path to the extracted data
+        hash:str, # Content hash of the extracted data (see `dataset_hash`)
+        size:int, # Total size in bytes of the extracted data
+        created:str=None, # ISO-8601 UTC creation timestamp (defaults to now)
+        id:str=None # Snapshot id (defaults to a deterministic id from url+hash)
+    ):
+        self.url,self.path,self.hash,self.size = url,str(path),hash,size
+        self.created = created or datetime.now(timezone.utc).isoformat()
+        self.id = id or _snapshot_id(url, hash)
+
+    def to_dict(self) -> dict:
+        "Serialise the snapshot to a plain dict for JSON storage"
+        return {'id':self.id, 'url':self.url, 'path':self.path, 'hash':self.hash,
+                'size':self.size, 'created':self.created}
+
+    @classmethod
+    def from_dict(cls, d:dict) -> 'DatasetSnapshot':
+        "Rebuild a `DatasetSnapshot` from its `to_dict` representation"
+        return cls(url=d['url'], path=d['path'], hash=d['hash'], size=d['size'],
+                   created=d.get('created'), id=d.get('id'))
+
+    def __eq__(self, other):
+        return isinstance(other, DatasetSnapshot) and self.to_dict()==other.to_dict()
+
+    def __repr__(self):
+        return f'DatasetSnapshot(id={self.id!r}, url={self.url!r}, path={self.path!r}, hash={self.hash!r}, size={self.size}, created={self.created!r})'
+
+# %% ../../nbs/04_data.external.ipynb 44
+def _read_lineage(
+    path:Path=None # Lineage registry file (defaults to `fastai_lineage_path`)
+) -> dict: # Mapping of snapshot id -> snapshot dict
+    "Load the lineage registry, returning {} if it does not exist yet"
+    path = Path(path) if path is not None else fastai_lineage_path()
+    if not path.exists(): return {}
+    try: return json.loads(path.read_text(encoding='utf-8'))
+    except json.JSONDecodeError as e:
+        raise ValueError(f'Corrupt lineage registry at {path}: {e}. Fix or remove the file to continue.') from e
+
+# %% ../../nbs/04_data.external.ipynb 45
+def _write_lineage(
+    registry:dict, # Full id -> snapshot dict mapping to persist
+    path:Path=None # Lineage registry file (defaults to `fastai_lineage_path`)
+):
+    "Atomically write the lineage `registry` to `path` (temp file then replace)"
+    path = Path(path) if path is not None else fastai_lineage_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.parent/f'.{path.name}.{os.getpid()}.tmp'
+    tmp.write_text(json.dumps(registry, indent=2, sort_keys=True), encoding='utf-8')
+    os.replace(tmp, path)
+
+# %% ../../nbs/04_data.external.ipynb 46
+def register_snapshot(
+    url:str, # Source url the dataset was downloaded from
+    path:Path, # Local path to the extracted data to snapshot
+    lineage_path:Path=None # Lineage registry file (defaults to `fastai_lineage_path`)
+) -> DatasetSnapshot: # The registered (and persisted) snapshot
+    "Hash the data at `path` and persist a `DatasetSnapshot` for `url` in the lineage registry"
+    path = Path(path)
+    hash = dataset_hash(path)
+    size = sum(f.stat().st_size for f in path.rglob('*') if f.is_file()) if path.is_dir() else path.stat().st_size
+    snap = DatasetSnapshot(url=url, path=path, hash=hash, size=size)
+    registry = _read_lineage(lineage_path)
+    prev = registry.get(snap.id)
+    if prev is not None and prev.get('path') != snap.path:
+        warnings.warn(f'Snapshot {snap.id!r} path changed from {prev["path"]!r} to {snap.path!r}; overwriting.')
+    registry[snap.id] = snap.to_dict()
+    _write_lineage(registry, lineage_path)
+    return snap
+
+# %% ../../nbs/04_data.external.ipynb 47
+def list_snapshots(
+    lineage_path:Path=None # Lineage registry file (defaults to `fastai_lineage_path`)
+) -> list: # Snapshots sorted by creation time, newest first
+    "Return all recorded `DatasetSnapshot`s, most recently created first"
+    registry = _read_lineage(lineage_path)
+    snaps = [DatasetSnapshot.from_dict(d) for d in registry.values()]
+    return sorted(snaps, key=lambda s: (s.created, s.id), reverse=True)
+
+# %% ../../nbs/04_data.external.ipynb 48
+def get_snapshot(
+    snapshot_id:str, # Id of the snapshot to fetch
+    lineage_path:Path=None # Lineage registry file (defaults to `fastai_lineage_path`)
+) -> DatasetSnapshot: # The matching snapshot
+    "Fetch a `DatasetSnapshot` by id, raising `KeyError` if it is unknown"
+    registry = _read_lineage(lineage_path)
+    if snapshot_id not in registry:
+        raise KeyError(f'Unknown snapshot id {snapshot_id!r}. Known ids: {sorted(registry)}')
+    return DatasetSnapshot.from_dict(registry[snapshot_id])
+
+# %% ../../nbs/04_data.external.ipynb 49
+def reproduce_snapshot(
+    snapshot_id:str, # Id of the snapshot to reproduce
+    lineage_path:Path=None # Lineage registry file (defaults to `fastai_lineage_path`)
+) -> Path: # Local path whose current contents match the recorded snapshot
+    "Verify local data still matches the recorded snapshot and return its `Path` (no download)"
+    snap = get_snapshot(snapshot_id, lineage_path)
+    path = Path(snap.path)
+    if not path.exists():
+        raise FileNotFoundError(f'Snapshot {snapshot_id!r} references {path} which no longer exists; re-download {snap.url} to reproduce it.')
+    current = dataset_hash(path)
+    if current != snap.hash:
+        raise ValueError(f'Local data at {path} no longer matches snapshot {snapshot_id!r} (hash {current} != {snap.hash}); re-download {snap.url} to reproduce it.')
+    return path
