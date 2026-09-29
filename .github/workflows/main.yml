@@ -27,7 +27,10 @@ jobs:
         run: |
           pip install "setuptools<72" wheel
           pip install --no-build-isolation git+https://github.com/fastai/fastcore.git@master
-          pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@main
+          # nbdev@main requires setuptools>=77 to build (PEP 639 SPDX license string);
+          # build it WITH isolation so pip provisions a compatible setuptools instead of
+          # forcing the pinned setuptools<72 above, which rejects the license metadata.
+          pip install git+https://github.com/fastai/nbdev.git@main
           pip install --no-deps -e .
       - name: Check nbdev sync
         run: |
