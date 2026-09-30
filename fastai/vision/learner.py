@@ -162,9 +162,8 @@ def add_head(body, nf, n_out, init=nn.init.kaiming_normal_, head=None, concat_po
     return model
 
 # %% ../../nbs/21_vision.learner.ipynb 31
-def create_vision_model(arch, n_out, pretrained=True, weights=None, cut=None, n_in=3, init=nn.init.kaiming_normal_, custom_head=None,
-                        concat_pool=True, pool=True, lin_ftrs=None, ps=0.5, first_bn=True, bn_final=False, lin_first=False, y_range=None):
-    "Create custom vision architecture"
+def _load_torchvision_body(arch, pretrained, weights, cut, n_in):
+    "Instantiate torchvision `arch` (respecting the >=0.13 `weights` API) and return its body."
     meta = model_meta.get(arch, _default_meta)
     if parse(torchvision.__version__) >= parse('0.13') and 'weights' in meta:
         if weights is not None and not pretrained:
@@ -172,12 +171,18 @@ def create_vision_model(arch, n_out, pretrained=True, weights=None, cut=None, n_
         model = arch(weights=meta['weights'] if (weights is None and pretrained) else weights)
     else:
         model = arch(pretrained=pretrained)
-    body = create_body(model, n_in, pretrained, ifnone(cut, meta['cut']))
+    return create_body(model, n_in, pretrained, ifnone(cut, meta['cut']))
+
+# %% ../../nbs/21_vision.learner.ipynb 32
+def create_vision_model(arch, n_out, pretrained=True, weights=None, cut=None, n_in=3, init=nn.init.kaiming_normal_, custom_head=None,
+                        concat_pool=True, pool=True, lin_ftrs=None, ps=0.5, first_bn=True, bn_final=False, lin_first=False, y_range=None):
+    "Create custom vision architecture"
+    body = _load_torchvision_body(arch, pretrained, weights, cut, n_in)
     nf = num_features_model(nn.Sequential(*body.children())) if custom_head is None else None
     return add_head(body, nf, n_out, init=init, head=custom_head, concat_pool=concat_pool, pool=pool,
                     lin_ftrs=lin_ftrs, ps=ps, first_bn=first_bn, bn_final=bn_final, lin_first=lin_first, y_range=y_range)
 
-# %% ../../nbs/21_vision.learner.ipynb 35
+# %% ../../nbs/21_vision.learner.ipynb 36
 class TimmBody(nn.Module):
     def __init__(self, model, pretrained:bool=True, cut=None, n_in:int=3):
         super().__init__()
@@ -186,7 +191,7 @@ class TimmBody(nn.Module):
     
     def forward(self,x): return self.model.forward_features(x) if self.needs_pool else self.model(x)
 
-# %% ../../nbs/21_vision.learner.ipynb 36
+# %% ../../nbs/21_vision.learner.ipynb 37
 def create_timm_model(arch, n_out, cut=None, pretrained=True, n_in=3, init=nn.init.kaiming_normal_, custom_head=None,
                      concat_pool=True, pool=True, lin_ftrs=None, ps=0.5, first_bn=True, bn_final=False, lin_first=False, y_range=None, **kwargs):
     "Create custom architecture using `arch`, `n_in` and `n_out` from the `timm` library"
@@ -197,7 +202,7 @@ def create_timm_model(arch, n_out, cut=None, pretrained=True, n_in=3, init=nn.in
                    lin_ftrs=lin_ftrs, ps=ps, first_bn=first_bn, bn_final=bn_final, lin_first=lin_first, y_range=y_range)
     return res,model.default_cfg
 
-# %% ../../nbs/21_vision.learner.ipynb 39
+# %% ../../nbs/21_vision.learner.ipynb 40
 def _add_norm(dls, meta, pretrained, n_in=3):
     if not pretrained: return
     stats = meta.get('stats')
@@ -206,7 +211,7 @@ def _add_norm(dls, meta, pretrained, n_in=3):
     if not dls.after_batch.fs.filter(risinstance(Normalize)):
         dls.add_tfms([Normalize.from_stats(*stats)],'after_batch')
 
-# %% ../../nbs/21_vision.learner.ipynb 41
+# %% ../../nbs/21_vision.learner.ipynb 42
 def _timm_norm(dls, cfg, pretrained, n_in=3):
     if not pretrained: return
     if n_in != len(cfg['mean']): return
@@ -214,7 +219,7 @@ def _timm_norm(dls, cfg, pretrained, n_in=3):
         tfm = Normalize.from_stats(cfg['mean'],cfg['std'])
         dls.add_tfms([tfm],'after_batch')
 
-# %% ../../nbs/21_vision.learner.ipynb 42
+# %% ../../nbs/21_vision.learner.ipynb 43
 @delegates(create_vision_model)
 def vision_learner(dls, arch, normalize=True, n_out=None, pretrained=True, weights=None,
         # learner args
@@ -245,22 +250,15 @@ def vision_learner(dls, arch, normalize=True, n_out=None, pretrained=True, weigh
     store_attr('arch,normalize,n_out,pretrained', self=learn, **kwargs)
     return learn
 
-# %% ../../nbs/21_vision.learner.ipynb 51
+# %% ../../nbs/21_vision.learner.ipynb 52
 @delegates(models.unet.DynamicUnet.__init__)
 def create_unet_model(arch, n_out, img_size, pretrained=True, weights=None, cut=None, n_in=3, **kwargs):
     "Create custom unet architecture"
-    meta = model_meta.get(arch, _default_meta)
-    if parse(torchvision.__version__) >= parse('0.13') and 'weights' in meta:
-        if weights is not None and not pretrained:
-            warn(f'{pretrained=} but `weights` are set {weights=}. To randomly initialize set `pretrained=False` & `weights=None`')
-        model = arch(weights=meta['weights'] if (weights is None and pretrained) else weights)
-    else:
-        model = arch(pretrained=pretrained)
-    body = create_body(model, n_in, pretrained, ifnone(cut, meta['cut']))
+    body = _load_torchvision_body(arch, pretrained, weights, cut, n_in)
     model = models.unet.DynamicUnet(body, n_out, img_size, **kwargs)
     return model
 
-# %% ../../nbs/21_vision.learner.ipynb 54
+# %% ../../nbs/21_vision.learner.ipynb 55
 @delegates(create_unet_model)
 def unet_learner(dls, arch, normalize=True, n_out=None, pretrained=True, weights=None, config=None,
                  # learner args
@@ -291,14 +289,14 @@ def unet_learner(dls, arch, normalize=True, n_out=None, pretrained=True, weights
     store_attr('arch,normalize,n_out,pretrained', self=learn, **kwargs)
     return learn
 
-# %% ../../nbs/21_vision.learner.ipynb 62
+# %% ../../nbs/21_vision.learner.ipynb 61
 @typedispatch
 def show_results(x:TensorImage, y, samples, outs, ctxs=None, max_n=10, nrows=None, ncols=None, figsize=None, **kwargs):
     if ctxs is None: ctxs = get_grid(min(len(samples), max_n), nrows=nrows, ncols=ncols, figsize=figsize)
     ctxs = show_results[object](x, y, samples, outs, ctxs=ctxs, max_n=max_n, **kwargs)
     return ctxs
 
-# %% ../../nbs/21_vision.learner.ipynb 63
+# %% ../../nbs/21_vision.learner.ipynb 62
 @typedispatch
 def show_results(x:TensorImage, y:TensorCategory, samples, outs, ctxs=None, max_n=10, nrows=None, ncols=None, figsize=None, **kwargs):
     if ctxs is None: ctxs = get_grid(min(len(samples), max_n), nrows=nrows, ncols=ncols, figsize=figsize)
@@ -308,7 +306,7 @@ def show_results(x:TensorImage, y:TensorCategory, samples, outs, ctxs=None, max_
             for b,r,c,_ in zip(samples.itemgot(1),outs.itemgot(0),ctxs,range(max_n))]
     return ctxs
 
-# %% ../../nbs/21_vision.learner.ipynb 64
+# %% ../../nbs/21_vision.learner.ipynb 63
 @typedispatch
 def show_results(x:TensorImage, y:TensorMask|TensorPoint|TensorBBox, samples, outs, ctxs=None, max_n=6,
                  nrows=None, ncols=1, figsize=None, **kwargs):
@@ -320,7 +318,7 @@ def show_results(x:TensorImage, y:TensorMask|TensorPoint|TensorBBox, samples, ou
         ctxs[1::2] = [b.show(ctx=c, **kwargs) for b,c,_ in zip(o.itemgot(0),ctxs[1::2],range(2*max_n))]
     return ctxs
 
-# %% ../../nbs/21_vision.learner.ipynb 65
+# %% ../../nbs/21_vision.learner.ipynb 64
 @typedispatch
 def show_results(x:TensorImage, y:TensorImage, samples, outs, ctxs=None, max_n=10, figsize=None, **kwargs):
     if ctxs is None: ctxs = get_grid(3*min(len(samples), max_n), ncols=3, figsize=figsize, title='Input/Target/Prediction')
@@ -329,7 +327,7 @@ def show_results(x:TensorImage, y:TensorImage, samples, outs, ctxs=None, max_n=1
     ctxs[2::3] = [b.show(ctx=c, **kwargs) for b,c,_ in zip(outs.itemgot(0),ctxs[2::3],range(max_n))]
     return ctxs
 
-# %% ../../nbs/21_vision.learner.ipynb 66
+# %% ../../nbs/21_vision.learner.ipynb 65
 @typedispatch
 def plot_top_losses(x: TensorImage, y:TensorCategory, samples, outs, raws, losses, nrows=None, ncols=None, figsize=None, **kwargs):
     axs = get_grid(len(samples), nrows=nrows, ncols=ncols, figsize=figsize, title='Prediction/Actual/Loss/Probability')
@@ -337,7 +335,7 @@ def plot_top_losses(x: TensorImage, y:TensorCategory, samples, outs, raws, losse
         s[0].show(ctx=ax, **kwargs)
         ax.set_title(f'{o[0]}/{s[1]} / {l.item():.2f} / {r.max().item():.2f}')
 
-# %% ../../nbs/21_vision.learner.ipynb 67
+# %% ../../nbs/21_vision.learner.ipynb 66
 @typedispatch
 def plot_top_losses(x: TensorImage, y:TensorMultiCategory, samples, outs, raws, losses, nrows=None, ncols=None, figsize=None, **kwargs):
     axs = get_grid(len(samples), nrows=nrows, ncols=ncols, figsize=figsize)
@@ -348,7 +346,7 @@ def plot_top_losses(x: TensorImage, y:TensorMultiCategory, samples, outs, raws, 
         rows = [b.show(ctx=r, label=l, **kwargs) for b,r in zip(outs.itemgot(i),rows)]
     display_df(pd.DataFrame(rows))
 
-# %% ../../nbs/21_vision.learner.ipynb 68
+# %% ../../nbs/21_vision.learner.ipynb 67
 @typedispatch
 def plot_top_losses(x:TensorImage, y:TensorMask, samples, outs, raws, losses, nrows=None, ncols=None, figsize=None, **kwargs):
     axes = get_grid(len(samples)*3, nrows=len(samples), ncols=3, figsize=figsize, flatten=False, title="Input | Target | Prediction")

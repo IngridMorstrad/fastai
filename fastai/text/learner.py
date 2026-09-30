@@ -222,12 +222,6 @@ class LMLearner(TextLearner):
 from .models.core import _model_meta
 
 # %% ../../nbs/37_text.learner.ipynb 34
-def _get_text_vocab(dls):
-    vocab = dls.vocab
-    if isinstance(vocab, L): vocab = vocab[0]
-    return vocab
-
-# %% ../../nbs/37_text.learner.ipynb 35
 @delegates(Learner.__init__)
 def language_model_learner(dls, arch, config=None, drop_mult=1., backwards=False, pretrained=True, pretrained_fnames=None, **kwargs):
     "Create a `Learner` with a language model from `dls` and `arch`."
@@ -249,7 +243,7 @@ def language_model_learner(dls, arch, config=None, drop_mult=1., backwards=False
         learn = learn.load_pretrained(*fnames)
     return learn
 
-# %% ../../nbs/37_text.learner.ipynb 42
+# %% ../../nbs/37_text.learner.ipynb 41
 @delegates(Learner.__init__)
 def text_classifier_learner(dls, arch, seq_len=72, config=None, backwards=False, pretrained=True, drop_mult=0.5, n_out=None,
                             lin_ftrs=None, ps=None, max_len=72*20, y_range=None, **kwargs):
@@ -273,7 +267,7 @@ def text_classifier_learner(dls, arch, seq_len=72, config=None, backwards=False,
         learn.freeze()
     return learn
 
-# %% ../../nbs/37_text.learner.ipynb 46
+# %% ../../nbs/37_text.learner.ipynb 45
 @typedispatch
 def show_results(x: LMTensorText, y, samples, outs, ctxs=None, max_n=10, **kwargs):
     if ctxs is None: ctxs = get_empty_df(min(len(samples), max_n))
@@ -283,7 +277,7 @@ def show_results(x: LMTensorText, y, samples, outs, ctxs=None, max_n=10, **kwarg
     display_df(pd.DataFrame(ctxs))
     return ctxs
 
-# %% ../../nbs/37_text.learner.ipynb 47
+# %% ../../nbs/37_text.learner.ipynb 46
 @typedispatch
 def show_results(x: TensorText, y, samples, outs, ctxs=None, max_n=10, trunc_at=150, **kwargs):
     if ctxs is None: ctxs = get_empty_df(min(len(samples), max_n))
@@ -292,7 +286,7 @@ def show_results(x: TensorText, y, samples, outs, ctxs=None, max_n=10, trunc_at=
     display_df(pd.DataFrame(ctxs))
     return ctxs
 
-# %% ../../nbs/37_text.learner.ipynb 48
+# %% ../../nbs/37_text.learner.ipynb 47
 @typedispatch
 def plot_top_losses(x: TensorText, y:TensorCategory, samples, outs, raws, losses, trunc_at=150, **kwargs):
     rows = get_empty_df(len(samples))
