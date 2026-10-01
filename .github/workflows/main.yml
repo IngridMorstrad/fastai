@@ -25,9 +25,12 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          pip install "setuptools<72" wheel
-          pip install --no-build-isolation git+https://github.com/fastai/fastcore.git@master
-          pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@main
+          # Install released fastcore/nbdev wheels from PyPI. Building the
+          # git @main/@master sources from source currently fails because
+          # nbdev's newer project.license metadata is rejected by the pinned
+          # setuptools during source metadata generation. Prebuilt wheels skip
+          # that build step and install cleanly.
+          pip install nbdev fastcore
           pip install --no-deps -e .
       - name: Check nbdev sync
         run: |
