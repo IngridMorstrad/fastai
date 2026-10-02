@@ -1,0 +1,7 @@
+{
+  "task_id": "task-fastai-check-env",
+  "task_description": "Implement the `fastai_check_env` CLI feature from FEATURE_REQUESTS.md (line 57) in the IngridMorstrad/fastai fork: a one-step environment validator for GPU drivers, CUDA version, and dependency compatibility. Follow the fork's hand-authored-module pattern (standalone fastai/check_env.py + tests/test_check_env.py, no notebook, no _modidx.py entry) and register a console_scripts entry in settings.ini. The only CI gate is nbdev sync; the change must not introduce a sync diff. Commit on a feature branch off master; do not push or open the PR.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001"],
+  "blocked_reason": null
+}
