@@ -26,6 +26,46 @@ class TabularLearner(Learner):
         full_dec = self.dls.decode(b)
         return full_dec,dec_preds[0],preds[0]
 
+    def fit_incremental(self,
+        new_df:pd.DataFrame, # New data to incorporate (same schema as original training data)
+        n_epoch:int=1, # Number of epochs to train on new data
+        lr:float=None, # Learning rate; defaults to the learner's stored lr scaled down by 10x
+        wd:float=None, # Weight decay; defaults to the learner's stored wd
+        valid_pct:float=0.2, # Fraction of new data to use for validation
+        bs:int=None, # Batch size; defaults to existing training DataLoader batch size
+        cbs:list=None, # Additional callbacks for this incremental fit
+        reset_opt:bool=False, # Whether to reset the optimizer (False preserves momentum/state)
+    ):
+        "Continue training on `new_df` without resetting model weights, enabling online/incremental learning"
+        old_dls = self.dls
+        try:
+            # Reuse existing preprocessing config from the training dataset
+            train_ds = old_dls.train_ds
+            cat_names = list(train_ds.cat_names)
+            cont_names = list(train_ds.cont_names)
+            y_names = list(train_ds.y_names)
+            procs = train_ds.procs
+
+            # Build new Tabular dataset reusing fitted procs (no re-fitting)
+            if bs is None: bs = old_dls.bs
+            n_valid = max(1, int(len(new_df) * valid_pct))
+            valid_idx = list(range(len(new_df) - n_valid, len(new_df)))
+            splits = [list(range(len(new_df) - n_valid)), valid_idx]
+
+            # Create new TabularPandas reusing existing fitted procs without re-setup
+            new_to = TabularPandas(new_df, procs=procs, cat_names=cat_names, cont_names=cont_names,
+                                   y_names=y_names, splits=splits, do_setup=False)
+            new_to.process()
+            new_dls = new_to.dataloaders(bs=bs)
+
+            # Swap in the new DataLoaders and train
+            self.dls = new_dls
+            if lr is None: lr = self.lr / 10
+            self.fit(n_epoch, lr=lr, wd=wd, cbs=cbs, reset_opt=reset_opt)
+        finally:
+            # Restore original DataLoaders so the learner remains usable for prediction
+            self.dls = old_dls
+
 # %% ../../nbs/43_tabular.learner.ipynb 10
 @delegates(Learner.__init__)
 def tabular_learner(
