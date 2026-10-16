@@ -9,7 +9,8 @@ from .progress import *
 from .fp16 import *
 
 # %% auto 0
-__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'set_bn_eval', 'BnFreeze']
+__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'set_bn_eval', 'BnFreeze',
+           'StochasticWeightAveraging']
 
 # %% ../../nbs/18a_callback.training.ipynb 6
 class ShortEpochCallback(Callback):
@@ -57,3 +58,43 @@ class BnFreeze(Callback):
     "Freeze moving average statistics in all non-trainable batchnorm layers."
     def before_train(self):
         set_bn_eval(self.model)
+
+# %% ../../nbs/18a_callback.training.ipynb 35
+class StochasticWeightAveraging(Callback):
+    "Maintains an exponential moving average of model weights and swaps to averaged weights at evaluation time"
+    order,run_valid = MixedPrecision.order+2,True
+    def __init__(self, decay:float=0.999, start_epoch:int=1):
+        "Create SWA callback with EMA `decay` factor, starting after `start_epoch` epochs"
+        store_attr()
+    def before_fit(self):
+        "Initialize EMA parameters as a copy of the model parameters"
+        self.ema_params = [p.clone().detach() for p in self.parameters()]
+        self.epoch_count = 0
+    def after_step(self):
+        "Update EMA parameters with exponential moving average after each optimizer step"
+        if self.epoch_count < self.start_epoch: return
+        with torch.no_grad():
+            for ema_p, model_p in zip(self.ema_params, self.parameters()):
+                ema_p.mul_(self.decay).add_(model_p.data, alpha=1-self.decay)
+    def before_epoch(self):
+        "Track epoch count"
+        self.epoch_count = self.epoch
+    def before_validate(self):
+        "Swap model weights with EMA weights before validation"
+        if self.epoch_count < self.start_epoch: return
+        self._stored_params = [p.data.clone() for p in self.parameters()]
+        for model_p, ema_p in zip(self.parameters(), self.ema_params):
+            model_p.data.copy_(ema_p)
+    def after_validate(self):
+        "Restore original model weights after validation"
+        if not hasattr(self, '_stored_params') or self._stored_params is None: return
+        for model_p, stored_p in zip(self.parameters(), self._stored_params):
+            model_p.data.copy_(stored_p)
+        self._stored_params = None
+    def after_fit(self):
+        "Swap to EMA weights permanently after training completes"
+        if self.epoch_count >= self.start_epoch:
+            for model_p, ema_p in zip(self.parameters(), self.ema_params):
+                model_p.data.copy_(ema_p)
+        if hasattr(self, 'ema_params'): del self.ema_params
+        if hasattr(self, '_stored_params'): del self._stored_params
