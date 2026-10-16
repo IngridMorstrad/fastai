@@ -9,6 +9,7 @@
     189 ./fastai/callback/core.py
      73 ./fastai/callback/data.py
     246 ./fastai/callback/fp16.py
+     91 ./fastai/callback/gradient_noise.py
     283 ./fastai/callback/hook.py
       1 ./fastai/callback/__init__.py
     113 ./fastai/callback/mixup.py
@@ -94,17 +95,18 @@
     344 ./tests/test_checkpoint_averaging.py
     370 ./tests/test_collab.py
     640 ./tests/test_data_loader.py
-    719 ./tests/test_data_load.py
+    711 ./tests/test_data_load.py
     699 ./tests/test_data_transforms.py
     296 ./tests/test_gradcam.py
+    133 ./tests/test_gradient_noise.py
     475 ./tests/test_layers.py
     146 ./tests/test_lm_dataloader.py
     334 ./tests/test_losses.py
    1291 ./tests/test_metrics.py
     245 ./tests/test_multi_metric_early_stopping.py
     765 ./tests/test_optimizer.py
-    573 ./tests/test_text_core.py
+    561 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  24760 total
+  24964 total
 ```
