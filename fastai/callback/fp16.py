@@ -199,6 +199,7 @@ class NonNativeMixedPrecision(Callback):
             self.loss_scale /= self.div_factor
             self.learn.loss_grad /= self.div_factor #to record correct loss
             self.model.zero_grad()
+            self.count = 0
             raise CancelBatchException() #skip step and zero_grad
         to_master_grads(self.model_pgs, self.master_pgs, self.flat_master)
         for master_params in self.master_pgs:
