@@ -7,7 +7,7 @@ from __future__ import annotations
 from ..basics import *
 
 # %% auto 0
-__all__ = ['CollectDataCallback', 'WeightedDL', 'PartialDL']
+__all__ = ['CollectDataCallback', 'WeightedDL', 'ClassBalancedDL', 'PartialDL']
 
 # %% ../../nbs/14a_callback.data.ipynb 5
 class CollectDataCallback(Callback):
@@ -47,6 +47,60 @@ def weighted_dataloaders(self:DataBlock, source, wgts, bs=64, verbose:bool=False
     if not hasattr(wgts, '__array__'): wgts = np.array(wgts)
     trn_wgts = wgts[dss.splits[0]]
     return dss.weighted_dataloaders(trn_wgts, bs=bs, after_batch=self.batch_tfms, after_item=self.item_tfms, **kwargs)
+
+# %% ../../nbs/14a_callback.data.ipynb 13
+@delegates()
+class ClassBalancedDL(TfmdDL):
+    "DataLoader that automatically reweights sampling by inverse class frequency for balanced batches"
+    def __init__(self, dataset=None, bs=None, **kwargs):
+        super().__init__(dataset=dataset, bs=bs, **kwargs)
+        self.wgts = self._compute_class_weights()
+
+    def _compute_class_weights(self):
+        "Compute per-sample weights as inverse class frequency from dataset labels"
+        # Get labels from all items in the dataset
+        labels = []
+        for i in range(len(self.dataset)):
+            item = self.dataset[i]
+            # item is a tuple: (input(s)..., target)
+            # target is the last element
+            if isinstance(item, (tuple, list)):
+                label = item[-1]
+            else:
+                label = item
+            # Convert tensor to int if needed
+            if hasattr(label, 'item'):
+                label = label.item()
+            labels.append(label)
+        labels = array(labels)
+        # Compute class frequencies
+        classes, counts = np.unique(labels, return_counts=True)
+        class_weight = {c: 1.0 / count for c, count in zip(classes, counts)}
+        # Assign per-sample weight
+        wgts = array([class_weight[l] for l in labels])
+        wgts = wgts / wgts.sum()
+        return wgts
+
+    def get_idxs(self):
+        if self.n == 0: return []
+        if not self.shuffle: return super().get_idxs()
+        return list(np.random.choice(self.n, self.n, p=self.wgts))
+
+# %% ../../nbs/14a_callback.data.ipynb 13a
+@patch
+@delegates(Datasets.dataloaders)
+def class_balanced_dataloaders(self:Datasets, bs=64, **kwargs):
+    "Create a class-balanced dataloader `ClassBalancedDL` for the training set"
+    xtra_kwargs = [{}] * (self.n_subsets-1)
+    return self.dataloaders(bs=bs, dl_type=ClassBalancedDL, dl_kwargs=({}, *xtra_kwargs), **kwargs)
+
+# %% ../../nbs/14a_callback.data.ipynb 13b
+@patch
+@delegates(Datasets.class_balanced_dataloaders)
+def class_balanced_dataloaders(self:DataBlock, source, bs=64, verbose:bool=False, **kwargs):
+    "Create a class-balanced dataloader `ClassBalancedDL` for the dataset"
+    dss = self.datasets(source, verbose=verbose)
+    return dss.class_balanced_dataloaders(bs=bs, after_batch=self.batch_tfms, after_item=self.item_tfms, **kwargs)
 
 # %% ../../nbs/14a_callback.data.ipynb 14
 @delegates()
