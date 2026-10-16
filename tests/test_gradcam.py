@@ -20,7 +20,7 @@ matplotlib.use('Agg')  # Non-interactive backend for testing
 # Helper: Simple CNN model for testing
 # ============================================================
 
-def _make_simple_cnn(in_channels=3, num_classes=10, spatial=32):
+def _make_simple_cnn(in_channels=3, num_classes=10):
     """Create a minimal CNN for testing: 2 conv layers + global avg pool + linear."""
     return nn.Sequential(
         nn.Conv2d(in_channels, 8, kernel_size=3, padding=1),
