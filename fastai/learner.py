@@ -13,8 +13,9 @@ from collections.abc import MutableSequence
 # %% auto 0
 __all__ = ['replacing_yield', 'mk_metric', 'save_model', 'load_model', 'SkipToEpoch', 'Learner', 'before_batch_cb',
            'load_learner', 'Metric', 'AvgMetric', 'AvgLoss', 'AvgSmoothLoss', 'ValueMetric', 'Recorder', 'CastToTensor',
-           'CancelBackwardException', 'CancelStepException', 'CancelFitException', 'CancelEpochException',
-           'CancelTrainException', 'CancelValidException', 'CancelBatchException']
+           'tta_mean', 'tta_max', 'tta_median', 'tta_trimmed_mean', 'CancelBackwardException', 'CancelStepException',
+           'CancelFitException', 'CancelEpochException', 'CancelTrainException', 'CancelValidException',
+           'CancelBatchException']
 
 # %% ../nbs/13a_learner.ipynb 4
 _all_ = ['CancelBackwardException', 'CancelStepException','CancelFitException','CancelEpochException',
@@ -59,6 +60,11 @@ def load_model(file, model, opt, with_opt=True, device=None, strict=True, **torc
         except:
             if with_opt: warn("Could not load the optimizer state.")
     elif with_opt: warn("Saved file doesn't contain an optimizer state.")
+
+# %% ../nbs/13a_learner.ipynb 19
+def _try_concat(o):
+    try:    return torch.cat(o)
+    except: return sum([L(o_[i,:] for i in range_of(o_)) for o_ in o], L())
 
 # %% ../nbs/13a_learner.ipynb 20
 _before_epoch = [event.before_fit, event.before_epoch]
@@ -658,8 +664,29 @@ add_docs(Learner,
          unfreeze="Unfreeze the entire model")
 
 # %% ../nbs/13a_learner.ipynb 189
+def tta_mean(preds):
+    "Ensemble predictions by averaging along dim 0"
+    return preds.mean(0)
+
+def tta_max(preds):
+    "Ensemble predictions by taking the max along dim 0"
+    return preds.max(0)[0]
+
+def tta_median(preds):
+    "Ensemble predictions by taking the median along dim 0"
+    return preds.median(0)[0]
+
+def tta_trimmed_mean(preds, trim=0.2):
+    "Ensemble predictions by averaging after dropping top/bottom `trim` fraction"
+    n = preds.shape[0]
+    k = int(n * trim)
+    if k == 0: return preds.mean(0)
+    sorted_preds = preds.sort(0)[0]
+    return sorted_preds[k:n-k].mean(0)
+
+# %% ../nbs/13a_learner.ipynb 190
 @patch
-def tta(self:Learner, ds_idx=1, dl=None, n=4, item_tfms=None, batch_tfms=None, beta=0.25, use_max=False):
+def tta(self:Learner, ds_idx=1, dl=None, n=4, item_tfms=None, batch_tfms=None, beta=0.25, use_max=False, ensemble_func=None):
     "Return predictions on the `ds_idx` dataset or `dl` using Test Time Augmentation"
     if dl is None: dl = self.dls[ds_idx].new(shuffled=False, drop_last=False)
     if item_tfms is not None or batch_tfms is not None: dl = dl.new(after_item=item_tfms, after_batch=batch_tfms)
@@ -672,11 +699,16 @@ def tta(self:Learner, ds_idx=1, dl=None, n=4, item_tfms=None, batch_tfms=None, b
                 self.epoch = i #To keep track of progress on mbar since the progress callback will use self.epoch
                 aug_preds.append(self.get_preds(dl=dl, inner=True)[0][None])
         aug_preds = torch.cat(aug_preds)
-        aug_preds = aug_preds.max(0)[0] if use_max else aug_preds.mean(0)
+        if ensemble_func is not None: aug_preds = ensemble_func(aug_preds)
+        elif use_max: aug_preds = aug_preds.max(0)[0]
+        else: aug_preds = aug_preds.mean(0)
         self.epoch = n
         with dl.dataset.set_split_idx(1): preds,targs = self.get_preds(dl=dl, inner=True)
     finally: self(event.after_fit)
 
+    if ensemble_func is not None:
+        preds = (aug_preds,preds) if beta is None else torch.lerp(aug_preds, preds, beta)
+        return preds,targs
     if use_max: return torch.stack([preds, aug_preds], 0).max(0)[0],targs
     preds = (aug_preds,preds) if beta is None else torch.lerp(aug_preds, preds, beta)
     return preds,targs
