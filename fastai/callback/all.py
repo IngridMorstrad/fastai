@@ -6,6 +6,7 @@ from .mixup import *
 from .progress import *
 from .schedule import *
 from .tracker import *
+from .swa import *
 from .rnn import *
 from .training import *
 from .preds import *
