@@ -22,7 +22,7 @@ class WeightedDL(TfmdDL):
     "Weighted dataloader where `wgts` is used for the training set only"
     def __init__(self, dataset=None, bs=None, wgts=None, **kwargs):
         wgts = array([1.]*len(dataset) if wgts is None else wgts)
-        self.wgts = wgts/wgts.sum()
+        self.wgts = wgts/wgts.sum() if wgts.sum() > 0 else array([1.]*len(dataset))/len(dataset)
         super().__init__(dataset=dataset, bs=bs, **kwargs)
 
     def get_idxs(self):
