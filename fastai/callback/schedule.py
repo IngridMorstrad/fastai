@@ -51,7 +51,7 @@ def SchedPoly(start, end, power):
 # %% ../../nbs/14_callback.schedule.ipynb 28
 def combine_scheds(pcts, scheds):
     "Combine `scheds` according to `pcts` in one function"
-    assert sum(pcts) == 1.
+    assert abs(sum(pcts) - 1.) < 1e-7
     pcts = tensor([0] + L(pcts))
     assert torch.all(pcts >= 0)
     pcts = torch.cumsum(pcts, 0)
