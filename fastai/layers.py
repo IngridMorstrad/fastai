@@ -195,7 +195,7 @@ def sigmoid_(input, eps=1e-7):
     return input.sigmoid_().clamp_(eps,1-eps)
 
 # %% ../nbs/01_layers.ipynb 53
-from torch.nn.init import kaiming_uniform_,xavier_uniform_,normal_
+from torch.nn.init import kaiming_uniform_,uniform_,xavier_uniform_,normal_
 
 # %% ../nbs/01_layers.ipynb 54
 def vleaky_relu(input, inplace=True):

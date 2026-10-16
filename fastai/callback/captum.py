@@ -2,6 +2,7 @@
 
 # %% ../../nbs/70c_callback.captum.ipynb 3
 from __future__ import annotations
+import tempfile
 from ..basics import *
 
 # %% auto 0
@@ -20,12 +21,12 @@ def json_clean(o):
 jsonutil.json_clean = json_clean
 
 # %% ../../nbs/70c_callback.captum.ipynb 8
-from captum.attr import IntegratedGradients,NoiseTunnel,Occlusion
+from captum.attr import IntegratedGradients,NoiseTunnel,GradientShap,Occlusion
 from captum.attr import visualization as viz
 
 from matplotlib.colors import LinearSegmentedColormap
 
-from captum.insights import AttributionVisualizer
+from captum.insights import AttributionVisualizer, Batch
 from captum.insights.attr_vis.features import ImageFeature
 
 # %% ../../nbs/70c_callback.captum.ipynb 16
