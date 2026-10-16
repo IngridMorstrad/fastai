@@ -176,9 +176,6 @@ def _print_shapes(o, bs):
 # %% ../../nbs/15_callback.hook.ipynb 67
 def module_summary(learn, *xb):
     "Print a summary of `model` using `xb`"
-    #Individual parameters wrapped in ParameterModule aren't called through the hooks in `layer_info`,
-    #  thus are not counted inside the summary
-    #TODO: find a way to have them counted in param number somehow
     infos = layer_info(learn, *xb)
     n,bs = 76,find_bs(xb)
     inp_sz = _print_shapes(apply(lambda x:x.shape, xb), bs)
@@ -200,6 +197,10 @@ def module_summary(learn, *xb):
             ps += np
             if trn: trn_ps += np
         prev_sz = sz
+    # Use actual model parameters for totals so ParameterModule instances
+    # (whose forward() is never called during inference) are still counted.
+    ps = sum(p.numel() for p in learn.model.parameters())
+    trn_ps = sum(p.numel() for p in learn.model.parameters() if p.requires_grad)
     res += "\n" + "_" * n + "\n"
     res += f"\nTotal params: {ps:,}\n"
     res += f"Total trainable params: {trn_ps:,}\n"
