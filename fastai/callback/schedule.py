@@ -9,7 +9,7 @@ from ..basics import *
 # %% auto 0
 __all__ = ['annealer', 'sched_lin', 'sched_cos', 'sched_no', 'sched_exp', 'SchedLin', 'SchedCos', 'SchedNo', 'SchedExp',
            'SchedPoly', 'combine_scheds', 'combined_cos', 'ParamScheduler', 'LRFinder', 'valley', 'slide', 'minimum',
-           'steep', 'SuggestionMethod']
+           'steep', 'SuggestionMethod', 'LRWarmupCallback']
 
 # %% ../../nbs/14_callback.schedule.ipynb 3
 _all_ = ['SuggestionMethod']
@@ -297,3 +297,44 @@ def lr_find(self:Learner, start_lr=1e-7, end_lr=10, num_it=100, stop_div=True, s
         return SuggestedLRs(*lrs)
 
     elif show_plot: self.recorder.plot_lr_find()
+
+# %% 95
+@docs
+class LRWarmupCallback(Callback):
+    "A `Callback` that linearly or exponentially ramps the learning rate over `warmup_steps` initial steps to stabilize early training."
+    order = 61  # Run after ParamScheduler (order=60) so it can override LR during warmup
+    run_valid = False
+
+    def __init__(self,
+        warmup_steps:int=100, # number of training steps over which to ramp the learning rate
+        schedule:str='linear', # warmup schedule: 'linear' or 'exponential'
+        start_lr:float=1e-7 # initial learning rate at step 0 of warmup
+    ):
+        assert schedule in ('linear', 'exponential'), "schedule must be 'linear' or 'exponential'"
+        assert warmup_steps > 0, "warmup_steps must be positive"
+        self.warmup_steps,self.schedule,self.start_lr = warmup_steps,schedule,start_lr
+
+    def before_fit(self):
+        "Store the target learning rates from the optimizer to ramp toward."
+        self.target_lrs = [h['lr'] for h in self.opt.hypers]
+        self.step_count = 0
+
+    def before_batch(self):
+        "Set learning rate according to warmup schedule if still in warmup phase."
+        if not self.training: return
+        if self.step_count >= self.warmup_steps: return
+        pct = self.step_count / self.warmup_steps
+        for i, h in enumerate(self.opt.hypers):
+            target = self.target_lrs[i]
+            if self.schedule == 'linear':
+                h['lr'] = self.start_lr + pct * (target - self.start_lr)
+            else:  # exponential
+                h['lr'] = self.start_lr * (target / self.start_lr) ** pct
+
+    def after_batch(self):
+        "Increment step counter during training."
+        if self.training: self.step_count += 1
+
+    _docs = {"before_fit": "Store target learning rates from the optimizer",
+             "before_batch": "Apply warmup schedule to learning rate if within warmup phase",
+             "after_batch": "Increment the warmup step counter"}
