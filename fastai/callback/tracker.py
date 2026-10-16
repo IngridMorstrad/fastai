@@ -4,13 +4,12 @@
 
 # %% ../../nbs/17_callback.tracker.ipynb 2
 from __future__ import annotations
-import copy
 from ..basics import *
 from .progress import *
+from .fp16 import MixedPrecision
 
 # %% auto 0
-__all__ = ['TerminateOnNaNCallback', 'TrackerCallback', 'EarlyStoppingCallback', 'MultiMetricEarlyStoppingCallback', 'SaveModelCallback',
-           'ReduceLROnPlateau', 'CheckpointAveragingCallback']
+__all__ = ['TerminateOnNaNCallback', 'TrackerCallback', 'EarlyStoppingCallback', 'SaveModelCallback', 'ReduceLROnPlateau']
 
 # %% ../../nbs/17_callback.tracker.ipynb 6
 class TerminateOnNaNCallback(Callback):
@@ -73,74 +72,6 @@ class EarlyStoppingCallback(TrackerCallback):
             if self.wait >= self.patience:
                 print(f'No improvement since epoch {self.epoch-self.wait}: early stopping')
                 raise CancelFitException()
-
-# %% ../../nbs/17_callback.tracker.ipynb 23
-class MultiMetricEarlyStoppingCallback(Callback):
-    "A `Callback` that terminates training when multiple monitored metrics stop improving."
-    order = TrackerCallback.order+3
-    def __init__(self,
-        monitors=('valid_loss',), # list of values (losses or metrics) to monitor.
-        comp=None, # list of numpy comparison operators, one per monitor; defaults based on monitor name.
-        min_delta=0., # minimum delta for improvement; scalar applied to all, or list per monitor.
-        patience=1, # number of epochs to wait when training has not improved.
-        logic='all', # 'all' means stop only when ALL metrics stagnate; 'any' means stop when ANY metric stagnates.
-        reset_on_fit=True # before model fitting, reset monitored values.
-    ):
-        assert logic in ('all', 'any'), "logic must be 'all' or 'any'"
-        self.monitors = list(monitors)
-        n = len(self.monitors)
-        # Set up comparators
-        if comp is None:
-            self.comps = [np.less if ('loss' in m or 'error' in m) else np.greater for m in self.monitors]
-        else:
-            self.comps = list(comp) if hasattr(comp, '__iter__') else [comp] * n
-        # Set up min_delta per monitor
-        if isinstance(min_delta, (list, tuple)):
-            self.min_deltas = list(min_delta)
-        else:
-            self.min_deltas = [min_delta * (-1 if c == np.less else 1) for c in self.comps]
-        # Adjust sign for scalar case
-        if not isinstance(min_delta, (list, tuple)):
-            pass  # already handled above
-        else:
-            self.min_deltas = [d * (-1 if c == np.less else 1) for d, c in zip(self.min_deltas, self.comps)]
-        self.patience = patience
-        self.logic = logic
-        self.reset_on_fit = reset_on_fit
-
-    def before_fit(self):
-        "Prepare monitored values"
-        self.run = not hasattr(self, "lr_finder") and not hasattr(self, "gather_preds")
-        n = len(self.monitors)
-        if self.reset_on_fit or not hasattr(self, 'bests'):
-            self.bests = [float('inf') if c == np.less else -float('inf') for c in self.comps]
-        self.waits = [0] * n
-        # Validate all monitors exist
-        for m in self.monitors:
-            assert m in self.recorder.metric_names[1:], f"Monitor '{m}' not found in metrics"
-        self.idxs = [list(self.recorder.metric_names[1:]).index(m) for m in self.monitors]
-
-    def after_epoch(self):
-        "Compare each monitored value to its best and maybe stop training."
-        stagnant = []
-        for i, (idx, comp, min_delta, best) in enumerate(
-            zip(self.idxs, self.comps, self.min_deltas, self.bests)
-        ):
-            val = self.recorder.values[-1][idx]
-            if comp(val - min_delta, best):
-                self.bests[i] = val
-                self.waits[i] = 0
-                stagnant.append(False)
-            else:
-                self.waits[i] += 1
-                stagnant.append(self.waits[i] >= self.patience)
-
-        should_stop = all(stagnant) if self.logic == 'all' else any(stagnant)
-        if should_stop:
-            print(f'No improvement since epoch {self.epoch-max(self.waits)}: early stopping (logic={self.logic})')
-            raise CancelFitException()
-
-    def after_fit(self): self.run = True
 
 # %% ../../nbs/17_callback.tracker.ipynb 26
 class SaveModelCallback(TrackerCallback):
@@ -208,72 +139,3 @@ class ReduceLROnPlateau(TrackerCallback):
                 self.wait = 0
                 if self.opt.hypers[-1]["lr"] < old_lr:
                     print(f'Epoch {self.epoch}: reducing lr to {self.opt.hypers[-1]["lr"]}')
-
-# %%
-class CheckpointAveragingCallback(TrackerCallback):
-    """A `TrackerCallback` that maintains top-K model checkpoints and averages their weights at the end of training.
-
-    Note: Each stored checkpoint is a full deep-copy of the model state_dict. For large models,
-    this can consume significant memory (e.g., ~100 MB per slot for ResNet-50, ~1.2 GB for ViT-Large).
-    Choose `k` accordingly based on available memory.
-    """
-    order = TrackerCallback.order+2
-    def __init__(self,
-        monitor='valid_loss', # value (usually loss or metric) being monitored.
-        comp=None, # numpy comparison operator; np.less if monitor is loss, np.greater if monitor is metric.
-        min_delta=0., # minimum delta between the last monitor value and the best monitor value.
-        k=5, # number of top checkpoints to keep for averaging.
-        save_averaged=False, # if True, save the averaged model to disk at end of training.
-        fname='averaged_model', # filename used when saving the averaged model.
-        reset_on_fit=True # before model fitting, reset value being monitored to -infinity (if monitor is metric) or +infinity (if monitor is loss).
-    ):
-        super().__init__(monitor=monitor, comp=comp, min_delta=min_delta, reset_on_fit=reset_on_fit)
-        self.k,self.save_averaged,self.fname = k,save_averaged,fname
-
-    def before_fit(self):
-        "Initialize the top-K checkpoint list."
-        super().before_fit()
-        self.top_k = []
-        if self.run:
-            print(f'CheckpointAveragingCallback: will keep up to {self.k} checkpoint copies in memory.')
-
-    def after_epoch(self):
-        "Store a copy of the model state_dict if it is among the top-K."
-        if not self.run: return
-        super().after_epoch()
-        val = self.recorder.values[-1][self.idx]
-        state = copy.deepcopy(self.model.state_dict())
-        if len(self.top_k) < self.k:
-            self.top_k.append((val, state))
-            self.top_k.sort(key=lambda x: x[0], reverse=(self.comp == np.greater))
-        elif self.comp(val, self.top_k[-1][0]):
-            self.top_k[-1] = (val, state)
-            self.top_k.sort(key=lambda x: x[0], reverse=(self.comp == np.greater))
-
-    def _is_floating_point(self, tensor):
-        "Check if a tensor is floating-point (works for both PyTorch tensors and numpy arrays)."
-        if hasattr(tensor, 'is_floating_point'):
-            return tensor.is_floating_point()
-        # For numpy arrays, check dtype kind
-        if hasattr(tensor, 'dtype'):
-            return tensor.dtype.kind == 'f'
-        return True  # default to treating as float
-
-    def after_fit(self):
-        "Average the stored state_dicts and load into the model."
-        if len(self.top_k) > 0:
-            avg_state = {}
-            keys = self.top_k[0][1].keys()
-            # Use the best checkpoint (first in sorted list) for non-float buffers
-            best_state = self.top_k[0][1]
-            for key in keys:
-                tensors = [sd[key] for _, sd in self.top_k]
-                if self._is_floating_point(tensors[0]):
-                    avg_state[key] = sum(tensors) / len(tensors)
-                else:
-                    # For integer buffers (e.g. num_batches_tracked), use the best checkpoint's value
-                    avg_state[key] = copy.deepcopy(best_state[key])
-            self.model.load_state_dict(avg_state)
-            if self.save_averaged:
-                self.learn.save(self.fname)
-        super().after_fit()

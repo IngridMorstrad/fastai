@@ -11,7 +11,9 @@ __all__ = ['TensorBoardBaseCallback', 'TensorBoardCallback', 'TensorBoardProject
            'tensorboard_log']
 
 # %% ../../nbs/70a_callback.tensorboard.ipynb 18
+import tensorboard
 from torch.utils.tensorboard import SummaryWriter
+from .fp16 import ModelToHalf
 from .hook import hook_output
 
 # %% ../../nbs/70a_callback.tensorboard.ipynb 19
@@ -109,6 +111,11 @@ def _add_projector_features(learn, hook, feat):
     if getattr(learn.dl, 'vocab', None):
         feat['lbl'] = learn.y if first_epoch else torch.cat((feat['lbl'], learn.y),0)
     return feat
+
+# %% ../../nbs/70a_callback.tensorboard.ipynb 27
+def _get_embeddings(model, layer):
+    layer = model[0].encoder if layer == None else layer
+    return layer.weight
 
 # %% ../../nbs/70a_callback.tensorboard.ipynb 28
 @typedispatch
