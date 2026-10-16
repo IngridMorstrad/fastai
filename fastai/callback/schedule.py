@@ -142,6 +142,18 @@ def fit_sgdr(self:Learner, n_cycles, cycle_len, lr_max=None, cycle_mult=2, cbs=N
 
 # %% ../../nbs/14_callback.schedule.ipynb 60
 @patch
+def fit_warmup(self:Learner, n_epoch, lr=None, warmup_pct=0.25, warmup_mode='linear', div_final=1e5, wd=None,
+               cbs=None, reset_opt=False, start_epoch=0):
+    "Fit with a linear or exponential LR warmup from near-zero to `lr` over `warmup_pct` of training, then cosine decay."
+    if self.opt is None: self.create_opt()
+    self.opt.set_hyper('lr', self.lr if lr is None else lr)
+    lr = np.array([h['lr'] for h in self.opt.hypers])
+    sched_fn = SchedExp if warmup_mode == 'exp' else SchedLin
+    scheds = {'lr': combine_scheds([warmup_pct, 1-warmup_pct], [sched_fn(lr/100, lr), SchedCos(lr, lr/div_final)])}
+    self.fit(n_epoch, cbs=ParamScheduler(scheds)+L(cbs), reset_opt=reset_opt, wd=wd, start_epoch=start_epoch)
+
+# %% ../../nbs/14_callback.schedule.ipynb 63
+@patch
 @delegates(Learner.fit_one_cycle)
 def fine_tune(self:Learner, epochs, base_lr=2e-3, freeze_epochs=1, lr_mult=100,
               pct_start=0.3, div=5.0, **kwargs):
@@ -152,7 +164,7 @@ def fine_tune(self:Learner, epochs, base_lr=2e-3, freeze_epochs=1, lr_mult=100,
     self.unfreeze()
     self.fit_one_cycle(epochs, slice(base_lr/lr_mult, base_lr), pct_start=pct_start, div=div, **kwargs)
 
-# %% ../../nbs/14_callback.schedule.ipynb 67
+# %% ../../nbs/14_callback.schedule.ipynb 70
 @docs
 class LRFinder(ParamScheduler):
     "Training with exponentially growing learning rate"
@@ -194,7 +206,7 @@ class LRFinder(ParamScheduler):
              "after_fit": "Save the hyper-parameters in the recorder if there is one and load the original model",
              "before_validate": "Skip the validation part of training"}
 
-# %% ../../nbs/14_callback.schedule.ipynb 78
+# %% ../../nbs/14_callback.schedule.ipynb 81
 def valley(lrs:list, losses:list, num_it:int):
     "Suggests a learning rate from the longest valley and returns its index"
     n = len(losses)
@@ -215,7 +227,7 @@ def valley(lrs:list, losses:list, num_it:int):
 
     return float(lrs[idx]), (float(lrs[idx]), losses[idx])
 
-# %% ../../nbs/14_callback.schedule.ipynb 81
+# %% ../../nbs/14_callback.schedule.ipynb 84
 def slide(lrs:list, losses:list, num_it:int, lr_diff:int=15, thresh:float=.005, adjust_value:float=1.):
     "Suggests a learning rate following an interval slide rule and returns its index"
     losses = to_np(losses)
@@ -233,14 +245,14 @@ def slide(lrs:list, losses:list, num_it:int, lr_diff:int=15, thresh:float=.005, 
     idx = np.interp(np.log10(suggestion), np.log10(lrs), losses)
     return suggestion, (suggestion, idx)
 
-# %% ../../nbs/14_callback.schedule.ipynb 84
+# %% ../../nbs/14_callback.schedule.ipynb 87
 def minimum(lrs:list, losses:list, num_it:int):
     "Suggests a learning rate one-tenth the minumum before divergance and returns its index"
     lr_min = lrs[losses.argmin()].item()
     loss_idx = losses[min(range(len(lrs)), key=lambda i: abs(lrs[i]-lr_min))]
     return lr_min/10, (lr_min, loss_idx)
 
-# %% ../../nbs/14_callback.schedule.ipynb 86
+# %% ../../nbs/14_callback.schedule.ipynb 89
 def steep(lrs:list, losses:list, num_it:int) -> (float, tuple):
     "Suggests a learning rate when the slope is the steepest and returns its index"
     grads = (losses[1:]-losses[:-1]) / (lrs[1:].log()-lrs[:-1].log())
@@ -248,7 +260,7 @@ def steep(lrs:list, losses:list, num_it:int) -> (float, tuple):
     loss_idx = losses[min(range(len(lrs)), key=lambda i: abs(lrs[i]-lr_steep))]
     return lr_steep, (lr_steep, loss_idx)
 
-# %% ../../nbs/14_callback.schedule.ipynb 88
+# %% ../../nbs/14_callback.schedule.ipynb 91
 @patch
 def plot_lr_find(self:Recorder, skip_end=5, return_fig=True, suggestions=None, nms=None, **kwargs):
     "Plot the result of an LR Finder test (won't work if you didn't do `learn.lr_find()` before)"
@@ -265,11 +277,11 @@ def plot_lr_find(self:Recorder, skip_end=5, return_fig=True, suggestions=None, n
             ax.plot(val, idx, 'o', label=nm, c=color)
         ax.legend(loc='best')
 
-# %% ../../nbs/14_callback.schedule.ipynb 89
+# %% ../../nbs/14_callback.schedule.ipynb 92
 mk_class("SuggestionMethod", **{o.__name__.capitalize():o for o in [valley,slide,minimum,steep]},
          doc="All possible suggestion methods as convience attributes to get tab-completion and typo-proofing")
 
-# %% ../../nbs/14_callback.schedule.ipynb 90
+# %% ../../nbs/14_callback.schedule.ipynb 93
 @patch
 def lr_find(self:Learner, start_lr=1e-7, end_lr=10, num_it=100, stop_div=True, show_plot=True, suggest_funcs=(SuggestionMethod.Valley)):
     "Launch a mock training to find a good learning rate and return suggestions based on `suggest_funcs` as a named tuple"
