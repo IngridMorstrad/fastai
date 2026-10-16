@@ -233,7 +233,7 @@ class ActivationStats(HookCallback):
         self.stats = L()
 
     def hook(self, m, i, o):
-        if isinstance(o, tuple): return self.hook_multi_ouput(o)
+        if isinstance(o, (tuple, list)): return self.hook_multi_ouput(o)
         o = o.float()
         res = {'mean': o.mean().item(), 'std': o.std().item(),
                'near_zero': (o<=0.05).long().sum().item()/o.numel()}
