@@ -9,7 +9,8 @@ from .progress import *
 from .fp16 import *
 
 # %% auto 0
-__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'set_bn_eval', 'BnFreeze']
+__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'set_bn_eval', 'BnFreeze',
+           'GPUMemProfileCallback']
 
 # %% ../../nbs/18a_callback.training.ipynb 6
 class ShortEpochCallback(Callback):
@@ -57,3 +58,22 @@ class BnFreeze(Callback):
     "Freeze moving average statistics in all non-trainable batchnorm layers."
     def before_train(self):
         set_bn_eval(self.model)
+
+# %% ../../nbs/18a_callback.training.ipynb 35
+class GPUMemProfileCallback(Callback):
+    "Log peak GPU memory usage per training step to diagnose OOM issues"
+    order = 99  # run late so other callbacks have finished their work
+    run_valid = False
+    def __init__(self, reset_peak=True, log=True):
+        store_attr()
+        self.peak_memory = []
+    def before_fit(self):
+        if not torch.cuda.is_available(): warn("GPUMemProfileCallback requires CUDA; no stats will be recorded."); return
+        self.peak_memory = []
+    def after_batch(self):
+        if not self.training or not torch.cuda.is_available(): return
+        peak = torch.cuda.max_memory_allocated()
+        self.peak_memory.append(peak)
+        if self.log: self.learn.log.append(f"gpu_peak_mem={peak/1024**2:.1f}MB")
+        if self.reset_peak: torch.cuda.reset_peak_memory_stats()
+
