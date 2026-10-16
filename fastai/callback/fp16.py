@@ -11,7 +11,7 @@ from torch.cuda.amp import GradScaler,autocast
 
 # %% auto 0
 __all__ = ['AMPMode', 'MixedPrecision', 'get_master', 'to_master_grads', 'to_model_params', 'test_overflow', 'grad_overflow',
-           'copy_clone', 'ModelToHalf', 'NonNativeMixedPrecision']
+           'copy_clone', 'ModelToHalf', 'NonNativeMixedPrecision', 'SelectiveMixedPrecision']
 
 # %% ../../nbs/18_callback.fp16.ipynb 19
 class AMPMode(Enum):
@@ -244,3 +244,51 @@ def to_non_native_fp16(self:Learner, **kwargs): return self.add_cbs([ModelToHalf
 # %% ../../nbs/18_callback.fp16.ipynb 69
 @patch
 def to_non_native_fp32(self: Learner): return self.remove_cbs([ModelToHalf, NonNativeMixedPrecision])
+
+# %% ../../nbs/18_callback.fp16.ipynb 72
+class SelectiveMixedPrecision(MixedPrecision):
+    """Mixed precision training that keeps designated layer types in full precision (fp32).
+
+    Wraps PyTorch AMP autocast and registers forward hooks on sensitive layers
+    (e.g. batch normalization) to cast their outputs back to fp32, preventing
+    precision-related instability while still benefiting from fp16 elsewhere."""
+    def __init__(self,
+        fp32_layer_types:tuple=None, # Module types to keep in fp32 (default: all BatchNorm and LayerNorm)
+        amp_mode:str|AMPMode=AMPMode.FP16, # Mixed precision mode
+        **kwargs
+    ):
+        if fp32_layer_types is None:
+            fp32_layer_types = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.LayerNorm)
+        self.fp32_layer_types = fp32_layer_types
+        super().__init__(amp_mode=amp_mode, **kwargs)
+
+    def _fp32_forward_hook(self, module, input, output):
+        "Cast output of fp32-designated layers back to float32"
+        if isinstance(output, torch.Tensor): return output.float()
+        if isinstance(output, tuple): return tuple(o.float() if isinstance(o, torch.Tensor) else o for o in output)
+        return output
+
+    def before_fit(self):
+        super().before_fit()
+        self._hooks = []
+        for mod in self.model.modules():
+            if isinstance(mod, self.fp32_layer_types):
+                h = mod.register_forward_hook(self._fp32_forward_hook)
+                self._hooks.append(h)
+
+    def after_fit(self):
+        for h in self._hooks: h.remove()
+        self._hooks = []
+        super().after_fit()
+
+# %% ../../nbs/18_callback.fp16.ipynb 73
+@patch
+def to_selective_fp16(self:Learner, fp32_layer_types=None, **kwargs):
+    "Set `Learner` to mixed precision, keeping `fp32_layer_types` in full precision"
+    return self.add_cb(SelectiveMixedPrecision(fp32_layer_types=fp32_layer_types, **kwargs))
+
+# %% ../../nbs/18_callback.fp16.ipynb 74
+@patch
+def to_selective_fp32(self:Learner):
+    "Remove selective mixed precision from `Learner`"
+    return self.remove_cb(SelectiveMixedPrecision)
