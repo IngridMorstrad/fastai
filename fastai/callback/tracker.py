@@ -137,7 +137,7 @@ class MultiMetricEarlyStoppingCallback(Callback):
 
         should_stop = all(stagnant) if self.logic == 'all' else any(stagnant)
         if should_stop:
-            print(f'No improvement since epoch {self.epoch-max(self.waits)}: early stopping (logic={self.logic})')
+            print(f'No improvement since epoch {self.epoch-min(self.waits)}: early stopping (logic={self.logic})')
             raise CancelFitException()
 
     def after_fit(self): self.run = True

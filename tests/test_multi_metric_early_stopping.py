@@ -241,5 +241,63 @@ class TestMultiMetricEarlyStoppingCallback(unittest.TestCase):
             cb.after_epoch()
 
 
+    def test_early_stopping_message_reports_correct_epoch_for_asymmetric_waits(self):
+        """With logic='all' and asymmetric stagnation, the printed epoch should reflect
+        when the LAST metric started stagnating (min of waits), not when the first did."""
+        from unittest.mock import patch
+
+        cb = self._create_callback(
+            monitors=['valid_loss', 'accuracy'], patience=3, logic='all'
+        )
+        cb.recorder = FakeRecorder(['valid_loss', 'accuracy'])
+        cb.before_fit()
+
+        # Epoch 1: both improve
+        cb.recorder.values.append([0.5, 0.8])
+        cb.epoch = 1
+        cb.after_epoch()
+
+        # Epoch 2: loss worsens (wait=1), accuracy improves
+        cb.recorder.values.append([0.6, 0.85])
+        cb.epoch = 2
+        cb.after_epoch()
+
+        # Epoch 3: loss worsens (wait=2), accuracy improves
+        cb.recorder.values.append([0.7, 0.9])
+        cb.epoch = 3
+        cb.after_epoch()
+
+        # Epoch 4: loss worsens (wait=3 >= patience), accuracy improves (resets)
+        cb.recorder.values.append([0.8, 0.95])
+        cb.epoch = 4
+        cb.after_epoch()
+        # loss wait=3, accuracy wait=0 -- not all stagnant, no stop
+
+        # Epoch 5: loss worsens (wait=4), accuracy worsens (wait=1)
+        cb.recorder.values.append([0.9, 0.9])
+        cb.epoch = 5
+        cb.after_epoch()
+
+        # Epoch 6: loss worsens (wait=5), accuracy worsens (wait=2)
+        cb.recorder.values.append([1.0, 0.85])
+        cb.epoch = 6
+        cb.after_epoch()
+
+        # Epoch 7: loss worsens (wait=6), accuracy worsens (wait=3 >= patience)
+        # Now all stagnant: waits=[6, 3], should stop
+        # min(waits) = 3, so "No improvement since epoch 7-3 = 4"
+        # (epoch 4 is when accuracy last improved, i.e. when collective stagnation began)
+        cb.recorder.values.append([1.1, 0.8])
+        cb.epoch = 7
+        with patch('builtins.print') as mock_print:
+            with self.assertRaises(CancelFitException):
+                cb.after_epoch()
+            mock_print.assert_called_once()
+            printed_msg = mock_print.call_args[0][0]
+            # The correct epoch is 7 - min(6, 3) = 7 - 3 = 4
+            self.assertIn('epoch 4', printed_msg)
+            self.assertIn("logic=all", printed_msg)
+
+
 if __name__ == '__main__':
     unittest.main()
