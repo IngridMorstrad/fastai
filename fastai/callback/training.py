@@ -9,7 +9,8 @@ from .progress import *
 from .fp16 import *
 
 # %% auto 0
-__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'set_bn_eval', 'BnFreeze']
+__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'GradientNoiseCallback', 'set_bn_eval',
+           'BnFreeze']
 
 # %% ../../nbs/18a_callback.training.ipynb 6
 class ShortEpochCallback(Callback):
@@ -42,6 +43,20 @@ class GradientClip(Callback):
     def before_step(self): nn.utils.clip_grad_norm_(self.parameters(), self.max_norm, self.norm_type)
 
 # %% ../../nbs/18a_callback.training.ipynb 23
+class GradientNoiseCallback(Callback):
+    "Add gaussian noise to gradients with variance `eta / (1 + t)^gamma` to improve generalization (Neelakantan et al. 2015)"
+    order = MixedPrecision.order+1
+    def __init__(self, eta:float=0.3, gamma:float=0.55): store_attr()
+    def before_fit(self): self.count = 0
+    def before_step(self):
+        self.count += 1
+        variance = self.eta / (1 + self.count)**self.gamma
+        std = variance**0.5
+        for p in self.parameters():
+            if p.grad is not None:
+                p.grad.add_(torch.randn_like(p.grad) * std)
+
+# %% ../../nbs/18a_callback.training.ipynb 26
 bn_types = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)
 
 def set_bn_eval(m:nn.Module, use_eval=True)->None:
