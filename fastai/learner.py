@@ -680,3 +680,45 @@ def tta(self:Learner, ds_idx=1, dl=None, n=4, item_tfms=None, batch_tfms=None, b
     if use_max: return torch.stack([preds, aug_preds], 0).max(0)[0],targs
     preds = (aug_preds,preds) if beta is None else torch.lerp(aug_preds, preds, beta)
     return preds,targs
+
+# %% ../nbs/13a_learner.ipynb 191
+@patch
+def benchmark(self:Learner, ds_idx=1, dl=None, batch_sizes=None, n_batches=20, warmup=5):
+    "Profile inference latency, throughput, and memory usage across configurable batch sizes"
+    import time as time_mod
+    if batch_sizes is None: batch_sizes = [1, 4, 16, 64]
+    if dl is None: dl = self.dls[ds_idx]
+    device = next(self.model.parameters()).device
+    results = []
+    self.model.eval()
+    with torch.no_grad():
+        for bs in batch_sizes:
+            cur_dl = dl.new(bs=bs, shuffle=False, drop_last=True)
+            latencies = []
+            total_samples = 0
+            if device.type == "cuda": torch.cuda.reset_peak_memory_stats(device)
+            for i, batch in enumerate(cur_dl):
+                if i >= n_batches + warmup: break
+                batch = self._set_device(batch)
+                xb = batch[:getattr(self.dls, "n_inp", 1 if len(batch)==1 else len(batch)-1)]
+                if device.type == "cuda": torch.cuda.synchronize()
+                start = time_mod.perf_counter()
+                self.model(*xb)
+                if device.type == "cuda": torch.cuda.synchronize()
+                elapsed = time_mod.perf_counter() - start
+                if i >= warmup:
+                    latencies.append(elapsed)
+                    total_samples += bs
+            if not latencies:
+                results.append({"batch_size": bs, "error": "not enough batches"})
+                continue
+            avg_latency = sum(latencies) / len(latencies)
+            throughput = total_samples / sum(latencies)
+            mem_mb = torch.cuda.max_memory_allocated(device) / 1024**2 if device.type == "cuda" else None
+            results.append({
+                "batch_size": bs,
+                "avg_latency_ms": round(avg_latency * 1000, 2),
+                "throughput_samples_per_sec": round(throughput, 2),
+                "peak_memory_mb": round(mem_mb, 2) if mem_mb is not None else None
+            })
+    return results
