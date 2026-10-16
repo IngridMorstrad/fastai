@@ -9,7 +9,8 @@ from .progress import *
 from .fp16 import *
 
 # %% auto 0
-__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'set_bn_eval', 'BnFreeze']
+__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'set_bn_eval', 'BnFreeze',
+           'GpuMemProfileCallback']
 
 # %% ../../nbs/18a_callback.training.ipynb 6
 class ShortEpochCallback(Callback):
@@ -57,3 +58,38 @@ class BnFreeze(Callback):
     "Freeze moving average statistics in all non-trainable batchnorm layers."
     def before_train(self):
         set_bn_eval(self.model)
+
+# %% ../../nbs/18a_callback.training.ipynb 35
+class GpuMemProfileCallback(Callback):
+    "Log peak GPU memory usage per training step to help diagnose OOM issues"
+    order = 99  # run late so we capture all allocations from other callbacks
+    run_valid = False
+
+    def __init__(self, log_every:int=1):
+        "Set `log_every` to N to log peak memory every N batches (default: every batch)"
+        store_attr()
+
+    def before_fit(self):
+        if not torch.cuda.is_available(): return
+        self.device = self.learn.model.parameters().__next__().device
+        if self.device.type != 'cuda':
+            self._active = False
+            return
+        self._active = True
+        self.peak_mem = []
+        torch.cuda.reset_peak_memory_stats(self.device)
+
+    def after_batch(self):
+        if not getattr(self, '_active', False): return
+        if self.training and (self.train_iter % self.log_every == 0):
+            peak = torch.cuda.max_memory_allocated(self.device)
+            self.peak_mem.append(peak)
+            peak_mb = peak / (1024 * 1024)
+            print(f'[GpuMemProfile] Step {self.train_iter}: Peak GPU memory = {peak_mb:.1f} MB')
+            torch.cuda.reset_peak_memory_stats(self.device)
+
+    def after_fit(self):
+        if not getattr(self, '_active', False): return
+        if self.peak_mem:
+            max_peak = max(self.peak_mem) / (1024 * 1024)
+            print(f'[GpuMemProfile] Training complete. Max peak GPU memory = {max_peak:.1f} MB')
