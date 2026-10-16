@@ -21,6 +21,8 @@ For discussions about features before implementation, please use the [fastai for
 - [DONE] Add `Learner.fit_with_restarts()` implementing cosine annealing with warm restarts (SGDR), automatically adjusting cycle length and learning rate bounds across multiple restart cycles -- already implemented as `Learner.fit_sgdr()` in `fastai/callback/schedule.py`
 - Add a built-in gradient accumulation wrapper that transparently simulates larger batch sizes across multiple forward passes for memory-constrained GPUs
 
+- Add gradient accumulation support as a first-class Learner parameter to enable large effective batch sizes on memory-constrained GPUs
+
 ## Vision
 
 - Add native support for ONNX model export with dynamic batch-size axes directly from `Learner`
