@@ -274,6 +274,24 @@ class DataLoaders(GetAttr):
     ):
         return dblock.dataloaders(source, path=path, bs=bs, val_bs=val_bs, shuffle=shuffle, device=device, **kwargs)
 
+
+    @classmethod
+    def from_registry(cls,
+        name:str,  # Name of the dataset (e.g. 'mnist', 'cifar10', 'imagenette')
+        bs:int=64,  # Batch size
+        item_tfms=None,  # Item transforms
+        batch_tfms=None,  # Batch transforms
+        **kwargs
+    ):
+        "Download and cache a popular benchmark dataset by `name` and return `DataLoaders` with canonical train/val splits"
+        from fastai.data.external import URLs, untar_data, _REGISTRY
+        from fastai.vision.data import ImageDataLoaders
+        name_lower = name.lower()
+        if name_lower not in _REGISTRY:
+            raise ValueError(f"Unknown dataset '{name}'. Available: {sorted(_REGISTRY.keys())}")
+        path = untar_data(_REGISTRY[name_lower])
+        return ImageDataLoaders.from_folder(path, bs=bs, item_tfms=item_tfms, batch_tfms=batch_tfms, **kwargs)
+
     _docs=dict(__getitem__="Retrieve `DataLoader` at `i` (`0` is training, `1` is validation)",
                train="Training `DataLoader`",
                valid="Validation `DataLoader`",
@@ -284,7 +302,9 @@ class DataLoaders(GetAttr):
                cuda="Use accelerator if available",
                cpu="Use the cpu",
                new_empty="Create a new empty version of `self` with the same transforms",
-               from_dblock="Create a dataloaders from a given `dblock`")
+               from_dblock="Create a dataloaders from a given `dblock`",
+               from_registry="Download and cache a popular benchmark dataset by name and return DataLoaders")
+
 
 # %% ../../nbs/03_data.core.ipynb 50
 class FilteredBase:
