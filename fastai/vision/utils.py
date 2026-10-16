@@ -33,7 +33,7 @@ def _download_image_inner(dest, inp, timeout=4, preserve_filename=False):
     suffix = url_path.suffix if url_path.suffix else '.jpg'
     name = _get_downloaded_image_filename(dest, url_path.stem, suffix) if preserve_filename else str(uuid.uuid4())
     try: download_url(url, dest/f"{name}{suffix}", show_progress=False, timeout=timeout)
-    except Exception as e: f"Couldn't download {url}."
+    except Exception as e: warnings.warn(f"Couldn't download {url}.")
 
 # %% ../../nbs/09b_vision.utils.ipynb 9
 def download_images(dest, url_file=None, urls=None, max_pics=1000, n_workers=8, timeout=4, preserve_filename=False):
