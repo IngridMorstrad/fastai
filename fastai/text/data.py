@@ -169,7 +169,7 @@ def pad_input_chunk(samples, n_inp=1,**kwargs):
 class Pad_Chunk(DisplayedTransform):
     "Pad `samples` by adding padding by chunks of size `seq_len`"
     def __init__(self, pad_idx=1, pad_first=True, seq_len=72,decode=True,**kwargs):
-        store_attr('pad_idx, pad_first, seq_len,seq_len')
+        store_attr('pad_idx, pad_first, seq_len, decode')
         super().__init__(**kwargs)
     def before_call(self, b):
         "Set `self.max_len` before encodes" 
