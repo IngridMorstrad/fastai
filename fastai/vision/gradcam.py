@@ -76,6 +76,7 @@ class GradCAM:
 
             if class_idx is None:
                 class_idx = output.argmax(dim=1).item()
+            self.last_class_idx = class_idx
 
             self.model.zero_grad()
             target = output[0, class_idx]
@@ -224,7 +225,7 @@ def show_gradcam(model, img_tensor, class_idx=None, layer=None, method='gradcam'
     fig, ax = plt.subplots(1, 1, figsize=figsize)
     ax.imshow(img_np if img_np.shape[-1] == 3 else img_np.squeeze(), cmap='gray' if img_np.ndim == 2 or img_np.shape[-1] == 1 else None)
     ax.imshow(heatmap_np, cmap='jet', alpha=0.5)
-    ax.set_title(f'{"Grad-CAM++" if method == "gradcampp" else "Grad-CAM"} (class {class_idx})')
+    ax.set_title(f'{"Grad-CAM++" if method == "gradcampp" else "Grad-CAM"} (class {cam_obj.last_class_idx})')
     ax.axis('off')
     plt.tight_layout()
 
