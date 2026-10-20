@@ -18,8 +18,9 @@ except ModuleNotFoundError: pass
 
 # %% auto 0
 __all__ = ['model_meta', 'has_pool_type', 'cut_model', 'create_body', 'create_head', 'default_split', 'add_head',
-           'create_vision_model', 'TimmBody', 'create_timm_model', 'vision_learner', 'create_unet_model',
-           'unet_learner', 'show_results', 'plot_top_losses']
+           'create_vision_model', 'TimmBody', 'create_timm_model', 'vision_learner', 'SSLHead', 'nt_xent_loss',
+           'byol_loss', 'dino_loss', 'ema_update', 'create_unet_model', 'unet_learner', 'show_results',
+           'plot_top_losses']
 
 # %% ../../nbs/21_vision.learner.ipynb 7
 def _is_pool_type(l): return re.search(r'Pool[123]d$', l.__class__.__name__)
@@ -245,7 +246,118 @@ def vision_learner(dls, arch, normalize=True, n_out=None, pretrained=True, weigh
     store_attr('arch,normalize,n_out,pretrained', self=learn, **kwargs)
     return learn
 
-# %% ../../nbs/21_vision.learner.ipynb 51
+# %% ../../nbs/21_vision.learner.ipynb 52
+def _flatten_feats(x):
+    "Global-average-pool over spatial dims and flatten encoder output `x` to a 2d `(batch, features)` tensor."
+    if x.ndim > 2: x = x.mean(dim=list(range(2, x.ndim)))
+    return x.flatten(1)
+
+class SSLHead(Module):
+    "A small MLP projection/prediction head (`Linear`->`BatchNorm`->`ReLU`->`Linear`) mapping encoder features into the SSL embedding space."
+    def __init__(self, n_in, n_hidden=2048, n_out=256, bn_last=False):
+        layers = [nn.Linear(n_in, n_hidden), nn.BatchNorm1d(n_hidden), nn.ReLU(inplace=True), nn.Linear(n_hidden, n_out)]
+        if bn_last: layers.append(nn.BatchNorm1d(n_out, affine=False))
+        self.layers = nn.Sequential(*layers)
+    def forward(self, x): return self.layers(_flatten_feats(x))
+
+# %% ../../nbs/21_vision.learner.ipynb 53
+def nt_xent_loss(z1, z2, temperature=0.5):
+    "SimCLR NT-Xent contrastive loss over two batches of projected views `z1`,`z2`."
+    n = z1.shape[0]
+    z = F.normalize(torch.cat([z1, z2], dim=0), dim=1)
+    sim = z @ z.t() / temperature
+    sim.fill_diagonal_(-torch.finfo(sim.dtype).max)
+    targets = torch.cat([torch.arange(n, 2*n), torch.arange(0, n)]).to(z.device)
+    return F.cross_entropy(sim, targets)
+
+def byol_loss(pred, target):
+    "BYOL negative-cosine-similarity loss between online prediction `pred` and the stop-gradient `target` projection."
+    pred, target = F.normalize(pred, dim=1), F.normalize(target.detach(), dim=1)
+    return (2 - 2*(pred*target).sum(dim=1)).mean()
+
+def dino_loss(student_logits, teacher_logits, center, student_temp=0.1, teacher_temp=0.04):
+    "DINO cross-entropy between the sharpened student and the centered+sharpened stop-gradient teacher outputs."
+    s = F.log_softmax(student_logits/student_temp, dim=1)
+    t = F.softmax((teacher_logits-center)/teacher_temp, dim=1).detach()
+    return -(t*s).sum(dim=1).mean()
+
+@torch.no_grad()
+def ema_update(target, online, tau=0.996):
+    "In-place exponential-moving-average of `online` params/buffers into `target` with decay `tau`."
+    for tp, op in zip(target.parameters(), online.parameters()): tp.data.mul_(tau).add_(op.data, alpha=1-tau)
+    for tb, ob in zip(target.buffers(), online.buffers()): tb.data.copy_(ob.data)
+
+def _ssl_two_views(xb):
+    "Two stochastic augmented views of image batch `xb` via lightweight tensor ops (horizontal flip + gaussian jitter)."
+    def _aug(x):
+        if torch.rand(1).item() < 0.5: x = x.flip(-1)
+        return x + 0.05*torch.randn_like(x)
+    return _aug(xb), _aug(xb)
+
+# %% ../../nbs/21_vision.learner.ipynb 54
+_ssl_strategies = ('simclr','byol','dino')
+
+@patch
+def ssl_pretrain(self:Learner, strategy='simclr', n_epochs=1, lr=1e-3, proj_dim=256, hidden_dim=2048,
+                 n_batches=None, temperature=0.5, ema_tau=0.996, dino_out_dim=4096,
+                 student_temp=0.1, teacher_temp=0.04, center_momentum=0.9):
+    "Self-supervised pretraining of this `Learner`'s encoder (`model[0]`) on unlabeled `dls` with `strategy` in {'simclr','byol','dino'}; leaves the classification head intact and returns `self`."
+    if strategy not in _ssl_strategies:
+        raise ValueError(f"Unknown ssl strategy {strategy!r}; expected one of {_ssl_strategies}")
+    encoder = self.model[0]
+    device = next(self.model.parameters()).device
+    xb = first(self.dls.train)[0].to(device)
+    was_training = encoder.training
+    with torch.no_grad(): nf = _flatten_feats(encoder.eval()(xb)).shape[1]
+    encoder.train()
+
+    if strategy=='simclr':
+        head = SSLHead(nf, hidden_dim, proj_dim).to(device)
+        params = L(encoder.parameters()) + L(head.parameters())
+        def step(xb):
+            v1,v2 = _ssl_two_views(xb)
+            return nt_xent_loss(head(encoder(v1)), head(encoder(v2)), temperature)
+    elif strategy=='byol':
+        proj = SSLHead(nf, hidden_dim, proj_dim).to(device)
+        pred = SSLHead(proj_dim, hidden_dim, proj_dim).to(device)
+        t_enc, t_proj = deepcopy(encoder).to(device), deepcopy(proj).to(device)
+        for p in [*t_enc.parameters(), *t_proj.parameters()]: p.requires_grad_(False)
+        params = L(encoder.parameters()) + L(proj.parameters()) + L(pred.parameters())
+        def step(xb):
+            v1,v2 = _ssl_two_views(xb)
+            p1,p2 = pred(proj(encoder(v1))), pred(proj(encoder(v2)))
+            with torch.no_grad(): t1,t2 = t_proj(t_enc(v1)), t_proj(t_enc(v2))
+            loss = byol_loss(p1,t2) + byol_loss(p2,t1)
+            ema_update(t_enc, encoder, ema_tau); ema_update(t_proj, proj, ema_tau)
+            return loss
+    else: # dino
+        s_head = SSLHead(nf, hidden_dim, dino_out_dim).to(device)
+        t_enc, t_head = deepcopy(encoder).to(device), deepcopy(s_head).to(device)
+        for p in [*t_enc.parameters(), *t_head.parameters()]: p.requires_grad_(False)
+        center = torch.zeros(dino_out_dim, device=device)
+        params = L(encoder.parameters()) + L(s_head.parameters())
+        def step(xb):
+            v1,v2 = _ssl_two_views(xb)
+            s1,s2 = s_head(encoder(v1)), s_head(encoder(v2))
+            with torch.no_grad(): t1,t2 = t_head(t_enc(v1)), t_head(t_enc(v2))
+            loss = (dino_loss(s1,t2,center,student_temp,teacher_temp) +
+                    dino_loss(s2,t1,center,student_temp,teacher_temp)) / 2
+            with torch.no_grad():
+                center.mul_(center_momentum).add_(torch.cat([t1,t2]).mean(dim=0), alpha=1-center_momentum)
+            ema_update(t_enc, encoder, ema_tau); ema_update(t_head, s_head, ema_tau)
+            return loss
+
+    opt = self.opt_func(params, lr=lr)
+    self.model.train()
+    for _ in range(n_epochs):
+        for i,b in enumerate(self.dls.train):
+            if n_batches is not None and i>=n_batches: break
+            loss = step(b[0].to(device))
+            opt.zero_grad(); loss.backward(); opt.step()
+    if not was_training: encoder.eval()
+    return self
+
+# %% ../../nbs/21_vision.learner.ipynb 59
 @delegates(models.unet.DynamicUnet.__init__)
 def create_unet_model(arch, n_out, img_size, pretrained=True, weights=None, cut=None, n_in=3, **kwargs):
     "Create custom unet architecture"
@@ -260,7 +372,7 @@ def create_unet_model(arch, n_out, img_size, pretrained=True, weights=None, cut=
     model = models.unet.DynamicUnet(body, n_out, img_size, **kwargs)
     return model
 
-# %% ../../nbs/21_vision.learner.ipynb 54
+# %% ../../nbs/21_vision.learner.ipynb 62
 @delegates(create_unet_model)
 def unet_learner(dls, arch, normalize=True, n_out=None, pretrained=True, weights=None, config=None,
                  # learner args
@@ -291,14 +403,14 @@ def unet_learner(dls, arch, normalize=True, n_out=None, pretrained=True, weights
     store_attr('arch,normalize,n_out,pretrained', self=learn, **kwargs)
     return learn
 
-# %% ../../nbs/21_vision.learner.ipynb 62
+# %% ../../nbs/21_vision.learner.ipynb 68
 @typedispatch
 def show_results(x:TensorImage, y, samples, outs, ctxs=None, max_n=10, nrows=None, ncols=None, figsize=None, **kwargs):
     if ctxs is None: ctxs = get_grid(min(len(samples), max_n), nrows=nrows, ncols=ncols, figsize=figsize)
     ctxs = show_results[object](x, y, samples, outs, ctxs=ctxs, max_n=max_n, **kwargs)
     return ctxs
 
-# %% ../../nbs/21_vision.learner.ipynb 63
+# %% ../../nbs/21_vision.learner.ipynb 69
 @typedispatch
 def show_results(x:TensorImage, y:TensorCategory, samples, outs, ctxs=None, max_n=10, nrows=None, ncols=None, figsize=None, **kwargs):
     if ctxs is None: ctxs = get_grid(min(len(samples), max_n), nrows=nrows, ncols=ncols, figsize=figsize)
@@ -308,7 +420,7 @@ def show_results(x:TensorImage, y:TensorCategory, samples, outs, ctxs=None, max_
             for b,r,c,_ in zip(samples.itemgot(1),outs.itemgot(0),ctxs,range(max_n))]
     return ctxs
 
-# %% ../../nbs/21_vision.learner.ipynb 64
+# %% ../../nbs/21_vision.learner.ipynb 70
 @typedispatch
 def show_results(x:TensorImage, y:TensorMask|TensorPoint|TensorBBox, samples, outs, ctxs=None, max_n=6,
                  nrows=None, ncols=1, figsize=None, **kwargs):
@@ -320,7 +432,7 @@ def show_results(x:TensorImage, y:TensorMask|TensorPoint|TensorBBox, samples, ou
         ctxs[1::2] = [b.show(ctx=c, **kwargs) for b,c,_ in zip(o.itemgot(0),ctxs[1::2],range(2*max_n))]
     return ctxs
 
-# %% ../../nbs/21_vision.learner.ipynb 65
+# %% ../../nbs/21_vision.learner.ipynb 71
 @typedispatch
 def show_results(x:TensorImage, y:TensorImage, samples, outs, ctxs=None, max_n=10, figsize=None, **kwargs):
     if ctxs is None: ctxs = get_grid(3*min(len(samples), max_n), ncols=3, figsize=figsize, title='Input/Target/Prediction')
@@ -329,7 +441,7 @@ def show_results(x:TensorImage, y:TensorImage, samples, outs, ctxs=None, max_n=1
     ctxs[2::3] = [b.show(ctx=c, **kwargs) for b,c,_ in zip(outs.itemgot(0),ctxs[2::3],range(max_n))]
     return ctxs
 
-# %% ../../nbs/21_vision.learner.ipynb 66
+# %% ../../nbs/21_vision.learner.ipynb 72
 @typedispatch
 def plot_top_losses(x: TensorImage, y:TensorCategory, samples, outs, raws, losses, nrows=None, ncols=None, figsize=None, **kwargs):
     axs = get_grid(len(samples), nrows=nrows, ncols=ncols, figsize=figsize, title='Prediction/Actual/Loss/Probability')
@@ -337,7 +449,7 @@ def plot_top_losses(x: TensorImage, y:TensorCategory, samples, outs, raws, losse
         s[0].show(ctx=ax, **kwargs)
         ax.set_title(f'{o[0]}/{s[1]} / {l.item():.2f} / {r.max().item():.2f}')
 
-# %% ../../nbs/21_vision.learner.ipynb 67
+# %% ../../nbs/21_vision.learner.ipynb 73
 @typedispatch
 def plot_top_losses(x: TensorImage, y:TensorMultiCategory, samples, outs, raws, losses, nrows=None, ncols=None, figsize=None, **kwargs):
     axs = get_grid(len(samples), nrows=nrows, ncols=ncols, figsize=figsize)
@@ -348,7 +460,7 @@ def plot_top_losses(x: TensorImage, y:TensorMultiCategory, samples, outs, raws, 
         rows = [b.show(ctx=r, label=l, **kwargs) for b,r in zip(outs.itemgot(i),rows)]
     display_df(pd.DataFrame(rows))
 
-# %% ../../nbs/21_vision.learner.ipynb 68
+# %% ../../nbs/21_vision.learner.ipynb 74
 @typedispatch
 def plot_top_losses(x:TensorImage, y:TensorMask, samples, outs, raws, losses, nrows=None, ncols=None, figsize=None, **kwargs):
     axes = get_grid(len(samples)*3, nrows=len(samples), ncols=3, figsize=figsize, flatten=False, title="Input | Target | Prediction")
