@@ -27,7 +27,14 @@ jobs:
         run: |
           pip install "setuptools<72" wheel
           pip install --no-build-isolation git+https://github.com/fastai/fastcore.git@master
-          pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@main
+          # Pin nbdev to a known-good commit instead of the moving @main branch.
+          # nbdev@main (a336173c) switched project.license to the SPDX string form
+          # ("Apache-2.0") and bumped build requires to setuptools>=77, which the
+          # pinned "setuptools<72" here rejects (project.license must match exactly
+          # one definition). This commit (nbdev 3.3.21) is the last one using the
+          # table form {text = "Apache-2.0"} and builds cleanly under setuptools<72.
+          # The sync gate below is unchanged and still verifies notebook/library sync.
+          pip install --no-build-isolation git+https://github.com/fastai/nbdev.git@f9369273b96d5cccfc0e607d0cc083419922fce4
           pip install --no-deps -e .
       - name: Check nbdev sync
         run: |
