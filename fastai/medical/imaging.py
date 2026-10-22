@@ -72,7 +72,7 @@ def pixels(self:DcmDataset):
 def scaled_px(self:DcmDataset):
     "`pixels` scaled by `RescaleSlope` and `RescaleIntercept`"
     img = self.pixels
-    if hasattr(self, 'RescaleSlope') and hasattr(self, 'RescaleIntercept') is not None:
+    if hasattr(self, 'RescaleSlope') and hasattr(self, 'RescaleIntercept'):
         return img * self.RescaleSlope + self.RescaleIntercept 
     else: return img
 
