@@ -136,7 +136,7 @@ class Pad_Input(ItemTransform):
         if backwards: pad_first = not pad_first
         def _f(field_idx, x):
             if field_idx not in pad_fields: return x
-            idx = pad_fields.items.index(field_idx) #TODO: remove items if L.index is fixed
+            idx = pad_fields.index(field_idx)
             sl = slice(-len(x), sys.maxsize) if pad_first else slice(0, len(x))
             pad =  x.new_zeros(max_len_l[idx]-x.shape[0])+pad_idx
             x1 = torch.cat([pad, x] if pad_first else [x, pad])
