@@ -26,6 +26,81 @@ class TabularLearner(Learner):
         full_dec = self.dls.decode(b)
         return full_dec,dec_preds[0],preds[0]
 
+    def counterfactual(self,
+        row:pd.Series, # A single sample (same format as `predict` expects)
+        target_class, # Desired class: an int index or a label in `self.dls.vocab`
+        cont_step:float=0.1, # Step size for continuous nudges, scaled by each feature's raw std
+        max_iter:int=100, # Maximum number of greedy perturbation steps
+    ):
+        "Greedily perturb one feature at a time to flip the prediction of `row` to `target_class`"
+        vocab = getattr(self.dls, 'vocab', None)
+        if is_listy(vocab): vocab = vocab[-1]  # dls.vocab can be listy (x+y vocabs); the targets are the last
+        if isinstance(target_class, (int, np.integer)): target_idx = int(target_class)
+        elif vocab is not None and target_class in getattr(vocab, 'o2i', {}): target_idx = int(vocab.o2i[target_class])
+        elif vocab is not None and target_class in list(vocab): target_idx = list(vocab).index(target_class)
+        else: raise ValueError(f"Could not resolve target_class={target_class!r} to a class index; expected an int or one of {list(vocab) if vocab is not None else '<no vocab>'}")
+        if vocab is not None and not (0 <= target_idx < len(vocab)):
+            raise ValueError(f"target_class index {target_idx} out of range for vocab of size {len(vocab)}")
+        def _pred_idx(p): return int(array(p).argmax())  # the model's predicted class index for prob vector `p`
+        cur = row.copy()
+        _,_,probs = self.predict(cur)
+        best_prob = float(probs[target_idx])
+        if _pred_idx(probs) == target_idx:
+            return SimpleNamespace(row=cur, changes={}, success=True, target_prob=best_prob, iterations=0)
+        cont_names, cat_names = list(self.dls.cont_names), list(self.dls.cat_names)
+        # Scale continuous nudges by each feature's RAW std, which `Normalize.setups` stored on the proc
+        # (do NOT read train_ds.conts.std(): that frame is already normalized to ~unit std in place).
+        stds = {}
+        norm_proc = getattr(self.dls.procs, 'normalize', None)
+        if norm_proc is None:
+            for p in (self.dls.procs or []):
+                if hasattr(p, 'stds') and isinstance(getattr(p, 'stds'), dict): norm_proc = p; break
+        if norm_proc is not None:
+            try: stds = dict(getattr(norm_proc, 'stds', {}) or {})
+            except Exception: stds = {}
+        cat_levels = {}
+        cat_proc = getattr(self.dls.procs, 'categorify', None)
+        for n in cat_names:
+            levels = None
+            if cat_proc is not None and n in getattr(cat_proc, 'classes', {}):
+                levels = [l for l in list(cat_proc.classes[n]) if l != '#na#']
+            if not levels:
+                try: levels = list(self.dls.train_ds.items[n].unique())
+                except Exception: levels = []
+            cat_levels[n] = levels
+        changes = {}
+        iters = 0
+        while iters < max_iter:
+            iters += 1
+            best = None  # (gain, feature, new_value)
+            for n in cont_names:
+                old = cur[n]
+                if not np.isfinite(float(old)): continue
+                step = cont_step * (float(stds.get(n, 1.0)) or 1.0)
+                for new in (float(old)+step, float(old)-step):
+                    trial = cur.copy(); trial[n] = new
+                    _,_,p = self.predict(trial)
+                    gain = float(p[target_idx]) - best_prob
+                    if best is None or gain > best[0]: best = (gain, n, new)
+            for n in cat_names:
+                old = cur[n]
+                for new in cat_levels.get(n, []):
+                    if new == old: continue
+                    trial = cur.copy(); trial[n] = new
+                    _,_,p = self.predict(trial)
+                    gain = float(p[target_idx]) - best_prob
+                    if best is None or gain > best[0]: best = (gain, n, new)
+            if best is None or best[0] <= 0: break
+            _, feat, new_val = best
+            if feat not in changes: changes[feat] = (cur[feat], new_val)
+            else: changes[feat] = (changes[feat][0], new_val)
+            cur[feat] = new_val
+            _,_,probs = self.predict(cur)
+            best_prob = float(probs[target_idx])
+            if _pred_idx(probs) == target_idx:
+                return SimpleNamespace(row=cur, changes=changes, success=True, target_prob=best_prob, iterations=iters)
+        return SimpleNamespace(row=cur, changes=changes, success=False, target_prob=best_prob, iterations=iters)
+
 # %% ../../nbs/43_tabular.learner.ipynb 10
 @delegates(Learner.__init__)
 def tabular_learner(
@@ -48,7 +123,7 @@ def tabular_learner(
     model = TabularModel(emb_szs, len(dls.cont_names), n_out, layers, y_range=y_range, **config)
     return TabularLearner(dls, model, **kwargs)
 
-# %% ../../nbs/43_tabular.learner.ipynb 19
+# %% ../../nbs/43_tabular.learner.ipynb 22
 @typedispatch
 def show_results(x:Tabular, y:Tabular, samples, outs, ctxs=None, max_n=10, **kwargs):
     df = x.all_cols[:max_n]
