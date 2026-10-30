@@ -101,10 +101,10 @@
     146 ./tests/test_lm_dataloader.py
     334 ./tests/test_losses.py
    1291 ./tests/test_metrics.py
-    245 ./tests/test_multi_metric_early_stopping.py
+    201 ./tests/test_multi_metric_early_stopping.py
     765 ./tests/test_optimizer.py
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  24760 total
+  24716 total
 ```
