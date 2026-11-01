@@ -50,7 +50,7 @@
     165 ./fastai/test_utils.py
       6 ./fastai/text/all.py
     381 ./fastai/text/core.py
-    290 ./fastai/text/data.py
+    291 ./fastai/text/data.py
       1 ./fastai/text/__init__.py
     305 ./fastai/text/learner.py
     183 ./fastai/text/models/awdlstm.py
@@ -91,7 +91,7 @@
      63 ./setup.py
       9 ./tests/conftest.py
       0 ./tests/__init__.py
-    344 ./tests/test_checkpoint_averaging.py
+    326 ./tests/test_checkpoint_averaging.py
     370 ./tests/test_collab.py
     640 ./tests/test_data_loader.py
     719 ./tests/test_data_load.py
@@ -106,5 +106,5 @@
     573 ./tests/test_text_core.py
     527 ./tests/test_torch_core.py
     106 ./tests/_tracker_test_helpers.py
-  24760 total
+  24743 total
 ```
