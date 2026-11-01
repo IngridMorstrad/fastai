@@ -55,6 +55,17 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb.learn.model = cb.model
         return cb
 
+    def _run_epoch(self, cb, state, score):
+        """Drive the callback through a single epoch with the given state and monitored score."""
+        cb.model._state_dict = state
+        cb.recorder.values.append([score])
+        cb.after_epoch()
+
+    def _run_epochs(self, cb, states, scores):
+        """Drive the callback through multiple epochs, pairing each state with its score."""
+        for state, score in zip(states, scores):
+            self._run_epoch(cb, state, score)
+
     def test_default_parameters(self):
         """Test default parameter values."""
         cb = self._create_callback()
@@ -105,10 +116,7 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
 
         # Simulate 5 epochs with decreasing then increasing loss
         losses = [0.5, 0.4, 0.3, 0.6, 0.7]
-        for i, loss in enumerate(losses):
-            cb.model._state_dict = {'w': np.array([float(i)])}
-            cb.recorder.values.append([loss])
-            cb.after_epoch()
+        self._run_epochs(cb, [{'w': np.array([float(i)])} for i in range(len(losses))], losses)
 
         # Should keep 3 best (lowest) losses: 0.3, 0.4, 0.5
         self.assertEqual(len(cb.top_k), 3)
@@ -130,10 +138,7 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
             np.array([3.0, 6.0]),
         ]
         losses = [0.3, 0.2, 0.1]
-        for w, loss in zip(weights, losses):
-            cb.model._state_dict = {'w': w.copy()}
-            cb.recorder.values.append([loss])
-            cb.after_epoch()
+        self._run_epochs(cb, [{'w': w.copy()} for w in weights], losses)
 
         # Now call after_fit to average
         cb.after_fit()
@@ -151,10 +156,7 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         # Only 2 epochs
         weights = [np.array([2.0]), np.array([4.0])]
         losses = [0.5, 0.3]
-        for w, loss in zip(weights, losses):
-            cb.model._state_dict = {'w': w.copy()}
-            cb.recorder.values.append([loss])
-            cb.after_epoch()
+        self._run_epochs(cb, [{'w': w.copy()} for w in weights], losses)
 
         self.assertEqual(len(cb.top_k), 2)
         cb.after_fit()
@@ -170,9 +172,7 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb.before_fit()
 
         # One epoch to populate top_k
-        cb.model._state_dict = {'w': np.array([2.0])}
-        cb.recorder.values.append([0.5])
-        cb.after_epoch()
+        self._run_epoch(cb, {'w': np.array([2.0])}, 0.5)
 
         cb.after_fit()
         cb.learn.save.assert_called_once_with('my_avg_model')
@@ -183,9 +183,7 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb = self._setup_callback(cb, model_state={'w': np.array([1.0])})
         cb.before_fit()
 
-        cb.model._state_dict = {'w': np.array([2.0])}
-        cb.recorder.values.append([0.5])
-        cb.after_epoch()
+        self._run_epoch(cb, {'w': np.array([2.0])}, 0.5)
 
         cb.after_fit()
         cb.learn.save.assert_not_called()
@@ -198,10 +196,7 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
 
         # 5 epochs all improving (loss going down)
         losses = [0.5, 0.4, 0.3, 0.2, 0.1]
-        for i, loss in enumerate(losses):
-            cb.model._state_dict = {'w': np.array([float(i + 1)])}
-            cb.recorder.values.append([loss])
-            cb.after_epoch()
+        self._run_epochs(cb, [{'w': np.array([float(i + 1)])} for i in range(len(losses))], losses)
 
         # Only k=2 best (lowest loss): 0.1 and 0.2
         self.assertEqual(len(cb.top_k), 2)
@@ -222,10 +217,7 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
 
         # 5 epochs with varying accuracy
         accuracies = [0.7, 0.8, 0.75, 0.9, 0.85]
-        for i, acc in enumerate(accuracies):
-            cb.model._state_dict = {'w': np.array([float(i + 1)])}
-            cb.recorder.values.append([acc])
-            cb.after_epoch()
+        self._run_epochs(cb, [{'w': np.array([float(i + 1)])} for i in range(len(accuracies))], accuracies)
 
         # Top-3 highest accuracy: 0.9 (w=4), 0.85 (w=5), 0.8 (w=2)
         self.assertEqual(len(cb.top_k), 3)
@@ -257,14 +249,10 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb.before_fit()
 
         # Epoch 1
-        cb.model._state_dict = {'layer1.weight': np.array([2.0, 4.0]), 'layer1.bias': np.array([1.0])}
-        cb.recorder.values.append([0.3])
-        cb.after_epoch()
+        self._run_epoch(cb, {'layer1.weight': np.array([2.0, 4.0]), 'layer1.bias': np.array([1.0])}, 0.3)
 
         # Epoch 2
-        cb.model._state_dict = {'layer1.weight': np.array([4.0, 6.0]), 'layer1.bias': np.array([2.0])}
-        cb.recorder.values.append([0.2])
-        cb.after_epoch()
+        self._run_epoch(cb, {'layer1.weight': np.array([4.0, 6.0]), 'layer1.bias': np.array([2.0])}, 0.2)
 
         cb.after_fit()
 
@@ -286,9 +274,7 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb.run = False
 
         # Simulate epochs
-        cb.model._state_dict = {'w': np.array([99.0])}
-        cb.recorder.values.append([0.1])
-        cb.after_epoch()
+        self._run_epoch(cb, {'w': np.array([99.0])}, 0.1)
 
         # top_k should remain empty since run is False
         self.assertEqual(len(cb.top_k), 0)
@@ -304,20 +290,16 @@ class TestCheckpointAveragingCallback(unittest.TestCase):
         cb.before_fit()
 
         # Epoch 1 - best (lowest loss)
-        cb.model._state_dict = {
+        self._run_epoch(cb, {
             'weight': np.array([2.0, 4.0]),
             'num_batches_tracked': np.array([200], dtype=np.int64)
-        }
-        cb.recorder.values.append([0.2])
-        cb.after_epoch()
+        }, 0.2)
 
         # Epoch 2 - second best
-        cb.model._state_dict = {
+        self._run_epoch(cb, {
             'weight': np.array([4.0, 6.0]),
             'num_batches_tracked': np.array([300], dtype=np.int64)
-        }
-        cb.recorder.values.append([0.3])
-        cb.after_epoch()
+        }, 0.3)
 
         cb.after_fit()
 
