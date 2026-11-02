@@ -1,14 +1,18 @@
 """Tests for DataLoaders.from_registry (fastai.data.core).
 
-These tests are NETWORK-FREE: they monkeypatch `fastai.data.external.untar_data`
-and `fastai.vision.data.ImageDataLoaders.from_folder` so that no dataset is ever
-downloaded. `DataLoaders.from_registry` performs DEFERRED imports of both symbols
-inside its method body, so patching the ORIGINAL definitions (where they live) is
-what the deferred imports pick up at call time.
+These tests are NETWORK-FREE: they monkeypatch `fastai.data.external.untar_data`,
+`fastai.vision.data.ImageDataLoaders.from_folder`, `.from_name_re`, and
+`fastai.data.transforms.get_image_files` so that no dataset is ever downloaded and
+no real filesystem layout is touched. `DataLoaders.from_registry` performs DEFERRED
+imports of these symbols inside its method body, so patching the ORIGINAL definitions
+(where they live) is what the deferred imports pick up at call time.
 
 Covers:
   * case-insensitive / whitespace-tolerant name resolution to the correct URL,
   * dispatch to the correct builder with the resolved download path,
+  * folder-based datasets dispatch to `from_folder`; `pets` dispatches to the
+    filename-regex builder `from_name_re` (NOT `from_folder`, which would mislabel
+    the flat oxford-iiit-pet `images/` folder as a single class),
   * caller kwargs forwarding (and overriding the spec defaults),
   * unsupported names raising a helpful ValueError (name + supported list),
   * the text-family name 'glue' raising ValueError rather than being handled.
@@ -23,34 +27,55 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import fastai.data.external as external
 import fastai.vision.data as vision_data
+import fastai.data.transforms as data_transforms
 from fastai.data.core import DataLoaders
 
 
 @pytest.fixture
 def recorder(monkeypatch):
-    """Patch untar_data + ImageDataLoaders.from_folder and record their calls.
+    """Patch untar_data + the image builders and record their calls.
 
-    Returns a dict that captures the URL passed to untar_data and the
-    (path, kwargs) passed to the builder. The builder stub returns a sentinel
-    so we can assert from_registry returns exactly what the builder produced.
+    Returns a dict that captures the URL passed to untar_data, which builder was
+    invoked ('from_folder' or 'from_name_re'), and the (path, kwargs) passed to
+    that builder. Each builder stub returns a sentinel so we can assert
+    from_registry returns exactly what the builder produced. `get_image_files` is
+    stubbed to avoid touching a real filesystem for the name-regex (`pets`) path.
     """
-    calls = {'url': None, 'path': None, 'builder_kwargs': None}
+    calls = {'url': None, 'path': None, 'builder_kwargs': None, 'builder': None}
     fake_path = Path('/fake/cached/dataset')
     sentinel = object()
+    fake_fnames = ['Abyssinian_1.jpg', 'keeshond_34.jpg']
 
     def fake_untar_data(url, *args, **kwargs):
         calls['url'] = url
         return fake_path
 
     def fake_from_folder(cls, path, **kwargs):
+        calls['builder'] = 'from_folder'
         calls['path'] = path
         calls['builder_kwargs'] = kwargs
         return sentinel
 
+    def fake_from_name_re(cls, path, fnames, pat, **kwargs):
+        calls['builder'] = 'from_name_re'
+        calls['path'] = path
+        calls['fnames'] = fnames
+        calls['pat'] = pat
+        calls['builder_kwargs'] = kwargs
+        return sentinel
+
+    def fake_get_image_files(path, *args, **kwargs):
+        calls['get_image_files_path'] = path
+        return fake_fnames
+
     monkeypatch.setattr(external, 'untar_data', fake_untar_data)
     monkeypatch.setattr(vision_data.ImageDataLoaders, 'from_folder',
                         classmethod(fake_from_folder))
+    monkeypatch.setattr(vision_data.ImageDataLoaders, 'from_name_re',
+                        classmethod(fake_from_name_re))
+    monkeypatch.setattr(data_transforms, 'get_image_files', fake_get_image_files)
     calls['fake_path'] = fake_path
+    calls['fake_fnames'] = fake_fnames
     calls['sentinel'] = sentinel
     return calls
 
@@ -58,6 +83,7 @@ def recorder(monkeypatch):
 def test_known_name_dispatches_to_correct_url_and_builder(recorder):
     result = DataLoaders.from_registry('cifar')
     assert recorder['url'] == external.URLs.CIFAR
+    assert recorder['builder'] == 'from_folder'
     assert recorder['path'] == recorder['fake_path']
     assert result is recorder['sentinel']
 
@@ -81,9 +107,39 @@ def test_each_registered_name_resolves_to_its_url(recorder):
         'imagewoof': external.URLs.IMAGEWOOF,
         'pets': external.URLs.PETS,
     }
+    # pets uses the filename-regex builder; every other dataset uses from_folder.
+    expected_builder = {name: ('from_name_re' if name == 'pets' else 'from_folder')
+                        for name in expected}
     for name, url in expected.items():
         DataLoaders.from_registry(name)
         assert recorder['url'] == url, f"{name} -> wrong url"
+        assert recorder['builder'] == expected_builder[name], f"{name} -> wrong builder"
+
+
+def test_pets_dispatches_to_name_regex_builder(recorder):
+    # oxford-iiit-pet ships a FLAT images/ folder with the class in the filename, so pets must
+    # use from_name_re over path/'images', NOT from_folder (which would mislabel every image).
+    result = DataLoaders.from_registry('pets')
+    assert recorder['url'] == external.URLs.PETS
+    assert recorder['builder'] == 'from_name_re'
+    assert result is recorder['sentinel']
+    # builder runs over the images/ subfolder, and get_image_files is called on that same path
+    assert recorder['path'] == recorder['fake_path']/'images'
+    assert recorder['get_image_files_path'] == recorder['fake_path']/'images'
+    assert recorder['fnames'] is recorder['fake_fnames']
+    # a regex that captures the class prefix before the trailing _<digits>.jpg
+    assert recorder['pat'] == r'(.+)_\d+.jpg$'
+    # spec defaults are applied (random 20% validation split with a fixed seed)
+    assert recorder['builder_kwargs']['valid_pct'] == 0.2
+    assert recorder['builder_kwargs']['seed'] == 42
+
+
+def test_pets_caller_kwargs_override_spec_defaults(recorder):
+    DataLoaders.from_registry('pets', valid_pct=0.3, seed=7, bs=8)
+    bk = recorder['builder_kwargs']
+    assert bk['valid_pct'] == 0.3
+    assert bk['seed'] == 7
+    assert bk['bs'] == 8
 
 
 def test_caller_kwargs_forwarded_to_builder(recorder):

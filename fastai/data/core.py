@@ -282,21 +282,37 @@ class DataLoaders(GetAttr):
         # Deferred imports: `fastai.vision.data` and `fastai.data.external` both import this
         # module, so importing them at top level would create a circular import.
         from .external import untar_data, URLs
+        from .transforms import get_image_files
         from ..vision.data import ImageDataLoaders
-        # Explicit registry mapping friendly names -> download URL + builder + default builder kwargs.
-        # Only datasets that map cleanly to an existing `URLs` constant and builder are registered;
-        # anything else fails loudly (see below) rather than returning wrong/empty `DataLoaders`.
+        # A folder-layout dataset: `ImageDataLoaders.from_folder` labels images by their parent
+        # directory, so the tarball must extract to an imagenet-style `<split>/<class>/*.jpg` tree.
+        def _from_folder(train, valid):
+            return lambda path, **kw: ImageDataLoaders.from_folder(path, **{'train': train, 'valid': valid, **kw})
+        # oxford-iiit-pet extracts to a FLAT `images/` folder with the class encoded in the filename
+        # (e.g. `keeshond_34.jpg`), NOT a folder-per-class layout, so `from_folder` would label every
+        # image `images` (a degenerate single-class dataset). Use a filename-regex builder instead,
+        # matching the repo's own pets tutorials.
+        def _pets(path, **kw):
+            images = path/'images'
+            return ImageDataLoaders.from_name_re(images, get_image_files(images), pat=r'(.+)_\d+.jpg$',
+                                                 **{'valid_pct': 0.2, 'seed': 42, **kw})
+        # Explicit registry mapping friendly names -> download URL + a `build(path, **kwargs)` callable.
+        # The callable encapsulates HOW to build `DataLoaders` for that dataset (which builder, which
+        # split layout) so the registry can describe both folder-based AND name-based datasets, and
+        # caller kwargs always layer over (and win against) the spec's defaults. Only datasets that
+        # map cleanly to an existing `URLs` constant + builder are registered; anything else fails
+        # loudly (see below) rather than returning wrong/empty `DataLoaders`.
         registry = {
-            'cifar':          {'url': URLs.CIFAR,          'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'test'}},
-            'cifar100':       {'url': URLs.CIFAR_100,      'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'test'}},
-            'mnist':          {'url': URLs.MNIST,          'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'training', 'valid': 'testing'}},
-            'mnist_sample':   {'url': URLs.MNIST_SAMPLE,   'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'valid'}},
-            'mnist_tiny':     {'url': URLs.MNIST_TINY,     'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'valid'}},
-            'imagenette':     {'url': URLs.IMAGENETTE,     'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'val'}},
-            'imagenette_160': {'url': URLs.IMAGENETTE_160, 'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'val'}},
-            'imagenette_320': {'url': URLs.IMAGENETTE_320, 'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'val'}},
-            'imagewoof':      {'url': URLs.IMAGEWOOF,      'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'val'}},
-            'pets':           {'url': URLs.PETS,           'builder': ImageDataLoaders.from_folder, 'kwargs': {'valid_pct': 0.2, 'seed': 42}},
+            'cifar':          {'url': URLs.CIFAR,          'build': _from_folder('train', 'test')},
+            'cifar100':       {'url': URLs.CIFAR_100,      'build': _from_folder('train', 'test')},
+            'mnist':          {'url': URLs.MNIST,          'build': _from_folder('training', 'testing')},
+            'mnist_sample':   {'url': URLs.MNIST_SAMPLE,   'build': _from_folder('train', 'valid')},
+            'mnist_tiny':     {'url': URLs.MNIST_TINY,     'build': _from_folder('train', 'valid')},
+            'imagenette':     {'url': URLs.IMAGENETTE,     'build': _from_folder('train', 'val')},
+            'imagenette_160': {'url': URLs.IMAGENETTE_160, 'build': _from_folder('train', 'val')},
+            'imagenette_320': {'url': URLs.IMAGENETTE_320, 'build': _from_folder('train', 'val')},
+            'imagewoof':      {'url': URLs.IMAGEWOOF,      'build': _from_folder('train', 'val')},
+            'pets':           {'url': URLs.PETS,           'build': _pets},
         }
         # Text-benchmark families that have no clean canonical URL+builder in this codebase.
         text_families = {'glue', 'imdb', 'ag_news', 'wikitext', 'sst2'}
@@ -310,9 +326,8 @@ class DataLoaders(GetAttr):
             raise ValueError(msg)
         spec = registry[key]
         path = untar_data(spec['url'])
-        # Caller kwargs override the spec's default builder kwargs.
-        merged = {**spec['kwargs'], **kwargs}
-        return spec['builder'](path, **merged)
+        # The spec's `build` callable layers caller kwargs over its own defaults so the caller wins.
+        return spec['build'](path, **kwargs)
 
 
     _docs=dict(__getitem__="Retrieve `DataLoader` at `i` (`0` is training, `1` is validation)",
