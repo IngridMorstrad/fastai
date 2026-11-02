@@ -274,6 +274,47 @@ class DataLoaders(GetAttr):
     ):
         return dblock.dataloaders(source, path=path, bs=bs, val_bs=val_bs, shuffle=shuffle, device=device, **kwargs)
 
+    @classmethod
+    def from_registry(cls,
+        name:str, # Friendly name of a benchmark dataset (case-insensitive)
+        **kwargs # Passed through to the underlying builder (e.g. `bs`, `item_tfms`, `batch_tfms`, `device`, `valid`)
+    ) -> "DataLoaders":
+        # Deferred imports: `fastai.vision.data` and `fastai.data.external` both import this
+        # module, so importing them at top level would create a circular import.
+        from .external import untar_data, URLs
+        from ..vision.data import ImageDataLoaders
+        # Explicit registry mapping friendly names -> download URL + builder + default builder kwargs.
+        # Only datasets that map cleanly to an existing `URLs` constant and builder are registered;
+        # anything else fails loudly (see below) rather than returning wrong/empty `DataLoaders`.
+        registry = {
+            'cifar':          {'url': URLs.CIFAR,          'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'test'}},
+            'cifar100':       {'url': URLs.CIFAR_100,      'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'test'}},
+            'mnist':          {'url': URLs.MNIST,          'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'training', 'valid': 'testing'}},
+            'mnist_sample':   {'url': URLs.MNIST_SAMPLE,   'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'valid'}},
+            'mnist_tiny':     {'url': URLs.MNIST_TINY,     'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'valid'}},
+            'imagenette':     {'url': URLs.IMAGENETTE,     'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'val'}},
+            'imagenette_160': {'url': URLs.IMAGENETTE_160, 'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'val'}},
+            'imagenette_320': {'url': URLs.IMAGENETTE_320, 'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'val'}},
+            'imagewoof':      {'url': URLs.IMAGEWOOF,      'builder': ImageDataLoaders.from_folder, 'kwargs': {'train': 'train', 'valid': 'val'}},
+            'pets':           {'url': URLs.PETS,           'builder': ImageDataLoaders.from_folder, 'kwargs': {'valid_pct': 0.2, 'seed': 42}},
+        }
+        # Text-benchmark families that have no clean canonical URL+builder in this codebase.
+        text_families = {'glue', 'imdb', 'ag_news', 'wikitext', 'sst2'}
+        key = name.lower().strip()
+        if key not in registry:
+            supported = ', '.join(sorted(registry))
+            msg = f"Unknown dataset {name!r} for DataLoaders.from_registry. Supported names: {supported}."
+            if key in text_families:
+                msg += (f" {name!r} is a text-dataset family and is not supported via the image-classification"
+                        " registry in this codebase.")
+            raise ValueError(msg)
+        spec = registry[key]
+        path = untar_data(spec['url'])
+        # Caller kwargs override the spec's default builder kwargs.
+        merged = {**spec['kwargs'], **kwargs}
+        return spec['builder'](path, **merged)
+
+
     _docs=dict(__getitem__="Retrieve `DataLoader` at `i` (`0` is training, `1` is validation)",
                train="Training `DataLoader`",
                valid="Validation `DataLoader`",
@@ -284,9 +325,10 @@ class DataLoaders(GetAttr):
                cuda="Use accelerator if available",
                cpu="Use the cpu",
                new_empty="Create a new empty version of `self` with the same transforms",
-               from_dblock="Create a dataloaders from a given `dblock`")
+               from_dblock="Create a dataloaders from a given `dblock`",
+               from_registry="Download/cache a benchmark dataset by `name` and build `DataLoaders` with canonical splits")
 
-# %% ../../nbs/03_data.core.ipynb 50
+# %% ../../nbs/03_data.core.ipynb 51
 class FilteredBase:
     "Base class for lists with subsets"
     _dl_type,_dbunch_type = TfmdDL,DataLoaders
@@ -331,7 +373,7 @@ class FilteredBase:
 
 FilteredBase.train,FilteredBase.valid = add_props(lambda i,x: x.subset(i))
 
-# %% ../../nbs/03_data.core.ipynb 52
+# %% ../../nbs/03_data.core.ipynb 53
 class TfmdLists(FilteredBase, L, GetAttr):
     "A `Pipeline` of `tfms` applied to a collection of `items`"
     _default='tfms'
@@ -407,7 +449,7 @@ class TfmdLists(FilteredBase, L, GetAttr):
         if self._after_item is None: return res
         return self._after_item(res) if is_indexer(idx) else res.map(self._after_item)
 
-# %% ../../nbs/03_data.core.ipynb 53
+# %% ../../nbs/03_data.core.ipynb 54
 add_docs(TfmdLists,
          setup="Transform setup with self",
          decode="From `Pipeline`",
@@ -418,17 +460,17 @@ add_docs(TfmdLists,
          infer="Apply `self.tfms` to `x` starting at the right tfm depending on the type of `x`",
          new_empty="A new version of `self` but with no items")
 
-# %% ../../nbs/03_data.core.ipynb 54
+# %% ../../nbs/03_data.core.ipynb 55
 def decode_at(o, idx):
     "Decoded item at `idx`"
     return o.decode(o[idx])
 
-# %% ../../nbs/03_data.core.ipynb 55
+# %% ../../nbs/03_data.core.ipynb 56
 def show_at(o, idx, **kwargs):
     "Show item at `idx`",
     return o.show(o[idx], **kwargs)
 
-# %% ../../nbs/03_data.core.ipynb 73
+# %% ../../nbs/03_data.core.ipynb 74
 @docs
 @delegates(TfmdLists)
 class Datasets(FilteredBase):
@@ -491,7 +533,7 @@ class Datasets(FilteredBase):
         set_split_idx="Contextmanager to use the same `Datasets` with another `split_idx`"
     )
 
-# %% ../../nbs/03_data.core.ipynb 107
+# %% ../../nbs/03_data.core.ipynb 108
 def test_set(
     dsets:Datasets|TfmdLists, # Map- or iterable-style dataset from which to load the data
     test_items, # Items in test dataset
@@ -513,7 +555,7 @@ def test_set(
         return test_tl
     else: raise Exception(f"This method requires using the fastai library to assemble your data. Expected a `Datasets` or a `TfmdLists` but got {dsets.__class__.__name__}")
 
-# %% ../../nbs/03_data.core.ipynb 112
+# %% ../../nbs/03_data.core.ipynb 113
 @patch
 @delegates(TfmdDL.__init__)
 def test_dl(self:DataLoaders, 
