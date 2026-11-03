@@ -3,12 +3,8 @@
 Covers custom loss functions: BaseLoss, CrossEntropyLossFlat, FocalLoss,
 BCEWithLogitsLossFlat, MSELossFlat, LabelSmoothingCrossEntropy, DiceLoss.
 """
-import sys
-import os
 import torch
 import torch.nn as nn
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.losses import (
     BaseLoss, CrossEntropyLossFlat, FocalLoss, FocalLossFlat,
