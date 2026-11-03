@@ -3,13 +3,9 @@
 Covers TensorBase, tensor creation, utility functions, one_hot encoding,
 device management, and other core tensor operations.
 """
-import sys
-import os
 import numpy as np
 import torch
 from torch import Tensor
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.torch_core import (
     TensorBase, TensorImage, TensorImageBW, TensorMask, TensorCategory,

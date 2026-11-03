@@ -2,13 +2,9 @@
 
 Covers GradCAM, GradCAMPP, and show_gradcam with CPU-only dummy models.
 """
-import sys
-import os
 import pytest
 import torch
 import torch.nn as nn
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.vision.gradcam import GradCAM, GradCAMPP, show_gradcam, _find_last_conv2d
 

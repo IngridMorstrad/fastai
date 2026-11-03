@@ -4,14 +4,7 @@ Covers fa_collate, fa_convert, SkipItemException, collate_error,
 DataLoader class initialization, iteration, batching, shuffling,
 device placement, and edge cases.
 """
-import sys
-import os
 import pytest
-
-# Ensure the repo root is on sys.path so sub-package imports resolve correctly.
-_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if _repo_root not in sys.path:
-    sys.path.insert(0, _repo_root)
 
 # Patch missing functions from fastcore/fasttransform that are needed at runtime.
 # The installed fastcore version moved retain_types/cast to fasttransform;

@@ -3,12 +3,8 @@
 Covers the EmbeddingDotBias model: creation, forward pass, y_range clamping,
 from_classes factory method, and bias/weight retrieval.
 """
-import sys
-import os
 import pytest
 import torch
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.collab import EmbeddingDotBias
 

@@ -4,12 +4,8 @@ Covers: Optimizer base class, SGD, Adam, RMSProp, utility functions
 (sgd_step, weight_decay, l2_reg, average_grad, average_sqr_grad,
 momentum_step, debias, step_stat), freeze/unfreeze, state management.
 """
-import sys
-import os
 import torch
 import torch.nn as nn
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from fastai.optimizer import (
     Optimizer, SGD, Adam, RMSProp, RAdam, QHAdam, Larc, Lamb, Lookahead, ranger,
