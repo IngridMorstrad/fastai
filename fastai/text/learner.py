@@ -100,6 +100,65 @@ def load_model_text(
     elif with_opt: warn("Saved file doesn't contain an optimizer state.")
 
 # %% ../../nbs/37_text.learner.ipynb 17
+_RE_SENT_SPLIT = re.compile(r'(?<=[.!?])\s+')
+_RE_WORD = re.compile(r"[A-Za-z0-9']+")
+
+#A small, self-contained English stopword set so the extractive summariser needs no external data.
+_SUMMARIZE_STOPWORDS = set(
+    "a an the and or but if while is are was were be been being of to in on for with as at by "
+    "from that this these those it its he she they them his her their you your i we our not no do "
+    "does did have has had will would can could should may might must about into over under then "
+    "than so such also just only very more most some any each which who whom whose what when where "
+    "why how".split()
+)
+
+def _truncate_to_words(
+    text:str, # The already-produced summary text to cap
+    max_length:int, # Maximum number of words to keep (must be > 0)
+)->str:
+    "Hard-cap `text` to at most `max_length` words, retaining a trailing sentence terminator ('.'/'!'/'?') if truncation lands on a word that is immediately followed by one."
+    kept = list(itertools.islice(_RE_WORD.finditer(text), max_length))
+    if not kept: return text.strip()
+    end = kept[-1].end()
+    # Keep the sentence's terminator if the last kept word is immediately followed by one,
+    # so a truncated summary ends as a sentence rather than a bare fragment.
+    if end < len(text) and text[end] in '.!?': end += 1
+    return text[:end].strip()
+
+def _summarize_extractive(
+    text:str, # The source text to summarise
+    max_length:int, # Maximum number of words the summary may contain (must be > 0)
+)->str:
+    "Frequency-based extractive summary: pick the highest-salience sentences (in original order) within a `max_length` word budget."
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("`text` must be a non-empty string to summarize.")
+    if max_length is None or max_length <= 0:
+        raise ValueError(f"`max_length` must be a positive integer, got {max_length!r}.")
+    sentences = [s.strip() for s in _RE_SENT_SPLIT.split(text.strip()) if s.strip()]
+    if not sentences: raise ValueError("`text` contains no sentences to summarize.")
+    # Word-frequency salience over non-stopword tokens.
+    freqs = Counter()
+    for sent in sentences:
+        for w in _RE_WORD.findall(sent.lower()):
+            if w not in _SUMMARIZE_STOPWORDS: freqs[w] += 1
+    def _score(sent):
+        words = [w for w in _RE_WORD.findall(sent.lower()) if w not in _SUMMARIZE_STOPWORDS]
+        if not words: return 0.
+        return sum(freqs[w] for w in words)/len(words) # length-normalised so long sentences aren't unfairly favoured
+    # Rank sentences by salience (ties broken by original order), then re-order selections by position.
+    ranked = sorted(range(len(sentences)), key=lambda i: (-_score(sentences[i]), i))
+    selected, used = [], 0
+    for i in ranked:
+        n = len(_RE_WORD.findall(sentences[i]))
+        if used and used + n > max_length: continue # keep whole sentences within budget once we have at least one
+        selected.append(i)
+        used += n
+        if used >= max_length: break
+    if not selected: selected=[ranked[0]] # always return something for valid input (first sentence may exceed budget)
+    summary = ' '.join(sentences[i] for i in sorted(selected))
+    # Enforce the word budget hard, even if a single long sentence overshoots it.
+    return _truncate_to_words(summary, max_length)
+
 @delegates(Learner.__init__)
 class TextLearner(Learner):
     "Basic class for a `Learner` in NLP."
@@ -167,7 +226,50 @@ class TextLearner(Learner):
         load_model_text(file, self.model, self.opt, device=device, **kwargs)
         return self
 
-# %% ../../nbs/37_text.learner.ipynb 26
+    def summarize(self, 
+        text:str, # The source text to summarise
+        max_length:int=50, # Maximum number of words in the returned summary (must be > 0)
+        strategy:str='auto', # One of 'auto', 'abstractive', 'extractive'
+    ):
+        "Summarise `text` to at most `max_length` words, using the model's generation capability when available and an extractive fallback otherwise."
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("`text` must be a non-empty string to summarize.")
+        if max_length is None or max_length <= 0:
+            raise ValueError(f"`max_length` must be a positive integer, got {max_length!r}.")
+        if strategy not in ('auto', 'abstractive', 'extractive'):
+            raise ValueError(f"`strategy` must be one of 'auto', 'abstractive', 'extractive', got {strategy!r}.")
+        can_generate = hasattr(getattr(self, 'model', None), 'generate')
+        if strategy == 'abstractive' and not can_generate:
+            raise ValueError("Abstractive summarization requires a model exposing a `.generate` method (e.g. a seq2seq transformer).")
+        if (strategy == 'abstractive') or (strategy == 'auto' and can_generate):
+            summary = self._summarize_abstractive(text, max_length, warn_on_fallback=(strategy == 'abstractive'))
+            if summary is not None: return summary
+        return _summarize_extractive(text, max_length)
+
+    def _summarize_abstractive(self, 
+        text:str, # The source text to summarise
+        max_length:int, # Maximum number of words in the returned summary (must be > 0)
+        warn_on_fallback:bool=False, # Emit a warning before returning `None` (for an explicit abstractive request)
+    ):
+        "Abstractive summary via a HuggingFace-style `generate`; returns `None` if the optional backend is unavailable so the caller can fall back."
+        try:
+            import torch as _torch # noqa: F401
+            from transformers import AutoTokenizer # type: ignore
+        except ImportError:
+            if warn_on_fallback: warn("Abstractive summarization requested but `transformers`/`torch` is unavailable; falling back to extractive.")
+            return None
+        tok_name = getattr(self.model, 'name_or_path', None) or getattr(getattr(self.model, 'config', None), '_name_or_path', None)
+        if tok_name is None:
+            if warn_on_fallback: warn("Abstractive summarization requested but no tokenizer name could be derived from the model; falling back to extractive.")
+            return None
+        tokenizer = AutoTokenizer.from_pretrained(tok_name)
+        inputs = tokenizer(text, return_tensors='pt', truncation=True)
+        out = self.model.generate(**inputs, max_new_tokens=max_length)
+        summary = tokenizer.decode(out[0], skip_special_tokens=True)
+        # `max_new_tokens` bounds sub-word tokens, not words; enforce the documented word budget to keep the contract consistent across paths.
+        return _truncate_to_words(summary, max_length)
+
+# %% ../../nbs/37_text.learner.ipynb 27
 def decode_spec_tokens(tokens):
     "Decode the special tokens in `tokens`"
     new_toks,rule,arg = [],None,None
@@ -188,7 +290,7 @@ def decode_spec_tokens(tokens):
             else:              new_toks += [t] * arg
     return new_toks
 
-# %% ../../nbs/37_text.learner.ipynb 28
+# %% ../../nbs/37_text.learner.ipynb 29
 class LMLearner(TextLearner):
     "Add functionality to `TextLearner` when dealing with a language model"
     def predict(self, text, n_words=1, no_unk=True, temperature=1., min_p=None, no_bar=False,
@@ -218,16 +320,16 @@ class LMLearner(TextLearner):
     @delegates(Learner.get_preds)
     def get_preds(self, concat_dim=1, **kwargs): return super().get_preds(concat_dim=1, **kwargs)
 
-# %% ../../nbs/37_text.learner.ipynb 33
+# %% ../../nbs/37_text.learner.ipynb 34
 from .models.core import _model_meta
 
-# %% ../../nbs/37_text.learner.ipynb 34
+# %% ../../nbs/37_text.learner.ipynb 35
 def _get_text_vocab(dls):
     vocab = dls.vocab
     if isinstance(vocab, L): vocab = vocab[0]
     return vocab
 
-# %% ../../nbs/37_text.learner.ipynb 35
+# %% ../../nbs/37_text.learner.ipynb 36
 @delegates(Learner.__init__)
 def language_model_learner(dls, arch, config=None, drop_mult=1., backwards=False, pretrained=True, pretrained_fnames=None, **kwargs):
     "Create a `Learner` with a language model from `dls` and `arch`."
@@ -249,7 +351,7 @@ def language_model_learner(dls, arch, config=None, drop_mult=1., backwards=False
         learn = learn.load_pretrained(*fnames)
     return learn
 
-# %% ../../nbs/37_text.learner.ipynb 42
+# %% ../../nbs/37_text.learner.ipynb 43
 @delegates(Learner.__init__)
 def text_classifier_learner(dls, arch, seq_len=72, config=None, backwards=False, pretrained=True, drop_mult=0.5, n_out=None,
                             lin_ftrs=None, ps=None, max_len=72*20, y_range=None, **kwargs):
@@ -273,7 +375,7 @@ def text_classifier_learner(dls, arch, seq_len=72, config=None, backwards=False,
         learn.freeze()
     return learn
 
-# %% ../../nbs/37_text.learner.ipynb 46
+# %% ../../nbs/37_text.learner.ipynb 47
 @typedispatch
 def show_results(x: LMTensorText, y, samples, outs, ctxs=None, max_n=10, **kwargs):
     if ctxs is None: ctxs = get_empty_df(min(len(samples), max_n))
@@ -283,7 +385,7 @@ def show_results(x: LMTensorText, y, samples, outs, ctxs=None, max_n=10, **kwarg
     display_df(pd.DataFrame(ctxs))
     return ctxs
 
-# %% ../../nbs/37_text.learner.ipynb 47
+# %% ../../nbs/37_text.learner.ipynb 48
 @typedispatch
 def show_results(x: TensorText, y, samples, outs, ctxs=None, max_n=10, trunc_at=150, **kwargs):
     if ctxs is None: ctxs = get_empty_df(min(len(samples), max_n))
@@ -292,7 +394,7 @@ def show_results(x: TensorText, y, samples, outs, ctxs=None, max_n=10, trunc_at=
     display_df(pd.DataFrame(ctxs))
     return ctxs
 
-# %% ../../nbs/37_text.learner.ipynb 48
+# %% ../../nbs/37_text.learner.ipynb 49
 @typedispatch
 def plot_top_losses(x: TensorText, y:TensorCategory, samples, outs, raws, losses, trunc_at=150, **kwargs):
     rows = get_empty_df(len(samples))
