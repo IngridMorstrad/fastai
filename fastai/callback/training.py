@@ -9,7 +9,7 @@ from .progress import *
 from .fp16 import *
 
 # %% auto 0
-__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientClip', 'set_bn_eval', 'BnFreeze']
+__all__ = ['bn_types', 'ShortEpochCallback', 'GradientAccumulation', 'GradientAccumulator', 'GradientClip', 'set_bn_eval', 'BnFreeze']
 
 # %% ../../nbs/18a_callback.training.ipynb 6
 class ShortEpochCallback(Callback):
@@ -35,13 +35,36 @@ class GradientAccumulation(Callback):
         else: self.count=0
 
 # %% ../../nbs/18a_callback.training.ipynb 16
+class GradientAccumulator(Callback):
+    "Accumulate gradients to simulate a larger `effective_bs` before updating weights"
+    order,run_valid = MixedPrecision.order-4,False
+    def __init__(self, effective_bs=32): store_attr()
+    def before_fit(self): self.acc=0
+    def before_train(self): self.acc=0 # don't let a partial group leak across epochs
+    def after_loss(self): self.learn.loss_grad /= self.effective_bs/find_bs(self.learn.yb)
+    def before_step(self):
+        "Step once `effective_bs` items are accumulated; flush the trailing partial group at epoch end"
+        self.learn.loss_grad *= self.effective_bs/find_bs(self.learn.yb) # restore loss_grad (convention parity with GradientAccumulation)
+        self.acc += find_bs(self.learn.yb)
+        last_batch = self.learn.iter == self.learn.n_iter-1
+        if self.acc<self.effective_bs and not last_batch: raise CancelBatchException() # skip step/zero_grad
+        else:
+            # Re-normalize a trailing partial group so the applied gradient is the true average
+            # over the items actually accumulated (acc), not 1/effective_bs. For a full group
+            # acc==effective_bs so the factor is 1 and the exact-multiple path is unchanged.
+            if self.acc!=self.effective_bs:
+                for p in self.model.parameters():
+                    if p.grad is not None: p.grad.mul_(self.effective_bs/self.acc)
+            self.acc=0 # real step happens -> opt.step()+opt.zero_grad() run
+
+# %% ../../nbs/18a_callback.training.ipynb 23
 class GradientClip(Callback):
     "Clip norm of gradients"
     order=MixedPrecision.order+1
     def __init__(self,max_norm:float=1., norm_type:float=2.0): store_attr()
     def before_step(self): nn.utils.clip_grad_norm_(self.parameters(), self.max_norm, self.norm_type)
 
-# %% ../../nbs/18a_callback.training.ipynb 23
+# %% ../../nbs/18a_callback.training.ipynb 30
 bn_types = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)
 
 def set_bn_eval(m:nn.Module, use_eval=True)->None:
