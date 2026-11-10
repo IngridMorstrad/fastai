@@ -7,7 +7,7 @@ from __future__ import annotations
 from ..basics import *
 
 # %% auto 0
-__all__ = ['CollectDataCallback', 'WeightedDL', 'PartialDL']
+__all__ = ['CollectDataCallback', 'WeightedDL', 'ClassBalancedDL', 'PartialDL']
 
 # %% ../../nbs/14a_callback.data.ipynb 5
 class CollectDataCallback(Callback):
@@ -50,6 +50,36 @@ def weighted_dataloaders(self:DataBlock, source, wgts, bs=64, verbose:bool=False
 
 # %% ../../nbs/14a_callback.data.ipynb 14
 @delegates()
+class ClassBalancedDL(WeightedDL):
+    "Weighted dataloader that samples each class with (approximately) equal probability using inverse class frequency"
+    def __init__(self, dataset=None, bs=None, labels=None, **kwargs):
+        if labels is None: wgts = None
+        else:
+            labels = array(labels)
+            _,class_idxs,class_counts = np.unique(labels, return_inverse=True, return_counts=True)
+            wgts = 1./class_counts[class_idxs]
+        super().__init__(dataset=dataset, bs=bs, wgts=wgts, **kwargs)
+
+# %% ../../nbs/14a_callback.data.ipynb 15
+@patch
+@delegates(Datasets.dataloaders)
+def class_balanced_dataloaders(self:Datasets, labels, bs=64, **kwargs):
+    "Create a `ClassBalancedDL` with inverse-frequency `labels` weighting for the training set"
+    xtra_kwargs = [{}] * (self.n_subsets-1)
+    return self.dataloaders(bs=bs, dl_type=ClassBalancedDL, dl_kwargs=({'labels':labels}, *xtra_kwargs), **kwargs)
+
+# %% ../../nbs/14a_callback.data.ipynb 16
+@patch
+@delegates(Datasets.class_balanced_dataloaders)
+def class_balanced_dataloaders(self:DataBlock, source, labels, bs=64, verbose:bool=False, **kwargs):
+    "Create a `ClassBalancedDL` with inverse-frequency `labels` weighting for the dataset"
+    dss = self.datasets(source, verbose=verbose)
+    if not hasattr(labels, '__array__'): labels = np.array(labels)
+    trn_labels = labels[dss.splits[0]]
+    return dss.class_balanced_dataloaders(trn_labels, bs=bs, after_batch=self.batch_tfms, after_item=self.item_tfms, **kwargs)
+
+# %% ../../nbs/14a_callback.data.ipynb 19
+@delegates()
 class PartialDL(TfmdDL):
     "Select randomly partial quantity of data at each epoch"
     def __init__(self, dataset=None, bs=None, partial_n=None, **kwargs):
@@ -64,7 +94,7 @@ class PartialDL(TfmdDL):
         if self.partial_n is None: return super().__len__()
         return self.partial_n//self.bs + (0 if self.drop_last or self.partial_n%self.bs==0 else 1)
 
-# %% ../../nbs/14a_callback.data.ipynb 15
+# %% ../../nbs/14a_callback.data.ipynb 20
 @patch
 @delegates(Datasets.dataloaders)
 def partial_dataloaders(self:FilteredBase, partial_n, bs=64, **kwargs):
