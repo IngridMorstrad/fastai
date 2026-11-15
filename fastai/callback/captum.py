@@ -25,7 +25,7 @@ from captum.attr import visualization as viz
 
 from matplotlib.colors import LinearSegmentedColormap
 
-from captum.insights import AttributionVisualizer
+from captum.insights import AttributionVisualizer, Batch
 from captum.insights.attr_vis.features import ImageFeature
 
 # %% ../../nbs/70c_callback.captum.ipynb 16
@@ -90,6 +90,15 @@ class CaptumInterpretation():
                                        target=enc_data[1],
                                        sliding_window_shapes=sliding_window_shapes,
                                        baselines=baseline)
+
+# %% ../../nbs/70c_callback.captum.ipynb 25
+@patch
+def _formatted_data_iter(x: CaptumInterpretation,dl,normalize_func):
+    dl_iter=iter(dl)
+    while True:
+        images,labels=next(dl_iter)
+        images=normalize_func.decode(images).to(dl.device)
+        yield Batch(inputs=images, labels=labels)
 
 # %% ../../nbs/70c_callback.captum.ipynb 26
 @patch
