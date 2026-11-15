@@ -28,6 +28,28 @@ def _make_module(name, attrs=None):
     return mod
 
 
+_STUBBED_MODULE_NAMES = (
+    'torch', 'torch.multiprocessing', 'torch.nn',
+    'fastai', 'fastai.basics', 'fastai.callback',
+    'fastai.callback.progress', 'fastai.callback.fp16',
+    'fastai.callback.tracker',
+)
+
+
+def _snapshot_modules(names):
+    """Capture current sys.modules entries for `names` (missing -> None sentinel)."""
+    return {name: sys.modules.get(name, None) for name in names}
+
+
+def _restore_modules(snapshot):
+    """Restore sys.modules to a previously captured snapshot."""
+    for name, mod in snapshot.items():
+        if mod is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = mod
+
+
 def _setup_mock_modules():
     """Install minimal mock modules so fastai.callback.tracker can be exec'd."""
     _make_module('torch', {'isinf': lambda x: False, 'isnan': lambda x: False})
@@ -93,8 +115,15 @@ def _load_tracker_module():
 
 
 # --- Module-level initialization ---
-_setup_mock_modules()
-tracker_module = _load_tracker_module()
+# Snapshot the real sys.modules entries that the mock setup clobbers, then
+# restore them afterwards. Without this, stubbing `torch`/`fastai.*` here leaks
+# into later test collection and breaks every module that imports real torch.
+_module_snapshot = _snapshot_modules(_STUBBED_MODULE_NAMES)
+try:
+    _setup_mock_modules()
+    tracker_module = _load_tracker_module()
+finally:
+    _restore_modules(_module_snapshot)
 
 
 # --- Shared test helpers ---
