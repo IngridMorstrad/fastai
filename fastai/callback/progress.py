@@ -90,7 +90,8 @@ class ShowGraphCallback(Callback):
         iters = range_of(rec.losses)
         val_losses = [v[1] for v in rec.values]
         x_bounds = (0, (self.n_epoch - len(self.nb_batches)) * self.nb_batches[0] + len(rec.losses))
-        y_bounds = (0, max((max(Tensor(rec.losses)), max(Tensor(val_losses)))))
+        all_losses = [l for l in [rec.losses, val_losses] if len(l)]
+        y_bounds = (0, max(max(Tensor(l)) for l in all_losses)) if all_losses else (0, 1)
         self.progress.mbar.update_graph([(iters, rec.losses), (self.nb_batches, val_losses)], x_bounds, y_bounds)
 
 # %% ../../nbs/16_callback.progress.ipynb 26
