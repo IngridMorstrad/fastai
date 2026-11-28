@@ -11,10 +11,10 @@ import pickle,threading
 from collections.abc import MutableSequence
 
 # %% auto 0
-__all__ = ['replacing_yield', 'mk_metric', 'save_model', 'load_model', 'SkipToEpoch', 'Learner', 'before_batch_cb',
-           'load_learner', 'Metric', 'AvgMetric', 'AvgLoss', 'AvgSmoothLoss', 'ValueMetric', 'Recorder', 'CastToTensor',
-           'CancelBackwardException', 'CancelStepException', 'CancelFitException', 'CancelEpochException',
-           'CancelTrainException', 'CancelValidException', 'CancelBatchException']
+__all__ = ['TTA_REDUCTIONS', 'replacing_yield', 'mk_metric', 'save_model', 'load_model', 'SkipToEpoch', 'Learner',
+           'before_batch_cb', 'load_learner', 'Metric', 'AvgMetric', 'AvgLoss', 'AvgSmoothLoss', 'ValueMetric',
+           'Recorder', 'CastToTensor', 'CancelBackwardException', 'CancelStepException', 'CancelFitException',
+           'CancelEpochException', 'CancelTrainException', 'CancelValidException', 'CancelBatchException']
 
 # %% ../nbs/13a_learner.ipynb 4
 _all_ = ['CancelBackwardException', 'CancelStepException','CancelFitException','CancelEpochException',
@@ -678,5 +678,58 @@ def tta(self:Learner, ds_idx=1, dl=None, n=4, item_tfms=None, batch_tfms=None, b
     finally: self(event.after_fit)
 
     if use_max: return torch.stack([preds, aug_preds], 0).max(0)[0],targs
+    preds = (aug_preds,preds) if beta is None else torch.lerp(aug_preds, preds, beta)
+    return preds,targs
+
+# %% ../nbs/13a_learner.ipynb 190
+# Reduction registry for configurable TTA ensembling. Each reducer takes a stacked
+# tensor of shape (n, batch, ...) and reduces over dim 0, returning (batch, ...).
+_TTA_GMEAN_EPS = 1e-6
+
+def _tta_gmean(preds):
+    "Geometric mean over dim 0. Expects probability-like (non-negative) inputs; clamps at `_TTA_GMEAN_EPS` to avoid log(0)."
+    return (preds.clamp(min=_TTA_GMEAN_EPS).log().mean(0)).exp()
+
+TTA_REDUCTIONS = {
+    'mean':   lambda preds: preds.mean(0),
+    'max':    lambda preds: preds.max(0)[0],
+    'gmean':  _tta_gmean,
+    'median': lambda preds: preds.median(0)[0],
+}
+
+def _tta_resolve_reduce(reduce):
+    "Resolve `reduce` (a name in `TTA_REDUCTIONS` or a callable) to a reducer function, failing loudly on a bad name."
+    if callable(reduce): return reduce
+    if reduce in TTA_REDUCTIONS: return TTA_REDUCTIONS[reduce]
+    raise ValueError(f"Unknown TTA reduction {reduce!r}. Pass a callable or one of {sorted(TTA_REDUCTIONS)}.")
+
+@patch
+def _tta_aug_preds(self:Learner, dl, n):
+    "Collect `n` stacks of augmented predictions over `dl` under split_idx(0); returns a tensor of shape (n, ...)."
+    with dl.dataset.set_split_idx(0), self.no_mbar():
+        if hasattr(self,'progress'): self.progress.mbar = master_bar(list(range(n)))
+        aug_preds = []
+        for i in self.progress.mbar if hasattr(self,'progress') else range(n):
+            self.epoch = i #To keep track of progress on mbar since the progress callback will use self.epoch
+            aug_preds.append(self.get_preds(dl=dl, inner=True)[0][None])
+    return torch.cat(aug_preds)
+
+@patch
+def tta_config(self:Learner, ds_idx=1, dl=None, n=4, item_tfms=None, batch_tfms=None, beta=0.25,
+               aug_reduce='mean', final_reduce=None):
+    "TTA with a configurable augmentation reduction (`aug_reduce`) and final clean/aug combination (`final_reduce`)."
+    if dl is None: dl = self.dls[ds_idx].new(shuffled=False, drop_last=False)
+    if item_tfms is not None or batch_tfms is not None: dl = dl.new(after_item=item_tfms, after_batch=batch_tfms)
+    aug_fn = _tta_resolve_reduce(aug_reduce)
+    final_fn = None if final_reduce is None else _tta_resolve_reduce(final_reduce)
+    try:
+        self(_before_epoch)
+        aug_preds = self._tta_aug_preds(dl, n)
+        aug_preds = aug_fn(aug_preds)
+        self.epoch = n
+        with dl.dataset.set_split_idx(1): preds,targs = self.get_preds(dl=dl, inner=True)
+    finally: self(event.after_fit)
+
+    if final_fn is not None: return final_fn(torch.stack([aug_preds, preds], 0)),targs
     preds = (aug_preds,preds) if beta is None else torch.lerp(aug_preds, preds, beta)
     return preds,targs
